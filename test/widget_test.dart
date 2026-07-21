@@ -1,30 +1,24 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:echolens/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('EchoLens boots into the spatial scan screen', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: EchoLensApp()));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('EchoLens'), findsOneWidget);
+    expect(find.text('SCANNING PHYSICAL SPACE'), findsOneWidget);
+
+    // flutter_animate schedules each entrance effect's `delay` via an
+    // uncancellable Future.delayed, so give the longest-delayed card
+    // (index 5 * 120ms) time to fire before tearing down. The Pulse Core
+    // radar itself animates forever by design, so pumpAndSettle() would
+    // never return — unmount explicitly instead to dispose its ticker and
+    // cancel the live-scan stream subscription.
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpWidget(const SizedBox());
   });
 }
