@@ -24,6 +24,18 @@ class MockEchoScanDataSource implements EchoScanDataSource {
     'Thermal Trace',
   ];
 
+  // Hardcoded demo target for the Phase 2 proximity-unlock flow. "Signal
+  // Cluster" (index 0) starts encrypted and only reveals itself once the
+  // user's live GPS fix is within EvaluateSignalProximity.unlockRadiusMeters
+  // of this point.
+  //
+  // These coordinates won't be anywhere near you — to test the unlock
+  // locally, run the app once, log the values coming out of
+  // WatchUserLocation, and paste your own current lat/lng in here.
+  static const _signalTargetLatitude = 37.4220;
+  static const _signalTargetLongitude = -122.0841;
+  static const _signalLockedLabel = 'FREQ #409';
+
   @override
   Stream<List<EchoNodeModel>> watch() {
     var nodes = List.generate(6, (i) => _seedNode(i));
@@ -53,6 +65,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
     // each other — a fully random draw noticeably clustered on-device.
     final sectorAngle = (2 * pi / 6) * index;
     final jitter = (_random.nextDouble() - 0.5) * (pi / 6);
+    final isSignalTarget = index == 0;
     return EchoNodeModel(
       id: 'echo_$index',
       label: _labels[index % _labels.length],
@@ -61,6 +74,10 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       distance: 0.3 + _random.nextDouble() * 0.65,
       depth: _random.nextDouble(),
       intensity: 0.4 + _random.nextDouble() * 0.6,
+      latitude: isSignalTarget ? _signalTargetLatitude : null,
+      longitude: isSignalTarget ? _signalTargetLongitude : null,
+      isLocked: isSignalTarget,
+      lockedLabel: isSignalTarget ? _signalLockedLabel : null,
     );
   }
 
@@ -75,6 +92,14 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       depth: clamp01(node.depth + (_random.nextDouble() - 0.5) * 0.06),
       intensity:
           clamp01(node.intensity + (_random.nextDouble() - 0.5) * 0.15),
+      // Geo anchor and lock metadata are static/derived, not part of the
+      // visual drift — carry them through untouched so EvaluateSignalProximity
+      // keeps working and the node doesn't momentarily "re-lock" every tick.
+      latitude: node.latitude,
+      longitude: node.longitude,
+      isLocked: node.isLocked,
+      lockedLabel: node.lockedLabel,
+      distanceMeters: node.distanceMeters,
     );
   }
 }

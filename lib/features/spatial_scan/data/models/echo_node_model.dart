@@ -12,6 +12,11 @@ class EchoNodeModel extends EchoNode {
     required super.distance,
     required super.depth,
     required super.intensity,
+    super.latitude,
+    super.longitude,
+    super.isLocked,
+    super.lockedLabel,
+    super.distanceMeters,
   });
 
   factory EchoNodeModel.fromJson(Map<String, dynamic> json) {
@@ -23,6 +28,10 @@ class EchoNodeModel extends EchoNode {
       distance: (json['distance'] as num).toDouble(),
       depth: (json['depth'] as num).toDouble(),
       intensity: (json['intensity'] as num).toDouble(),
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      isLocked: json['isLocked'] as bool? ?? false,
+      lockedLabel: json['lockedLabel'] as String?,
     );
   }
 
@@ -34,5 +43,9 @@ class EchoNodeModel extends EchoNode {
         'distance': distance,
         'depth': depth,
         'intensity': intensity,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        'isLocked': isLocked,
+        if (lockedLabel != null) 'lockedLabel': lockedLabel,
       };
 }

@@ -33,6 +33,8 @@ class SpatialScanScreen extends ConsumerWidget {
               return Column(
                 children: [
                   _Header(isScanning: state.isScanning, onToggle: viewModel.toggleScanning),
+                  if (state.locationErrorMessage != null)
+                    _LocationErrorBanner(message: state.locationErrorMessage!),
                   Expanded(
                     child: Center(
                       child: _PulseField(nodes: state.nodes, isScanning: state.isScanning, fieldSize: fieldSize),
@@ -83,6 +85,36 @@ class _Header extends StatelessWidget {
         ],
       ),
     ).animate().fadeIn(duration: 500.ms).slideY(begin: -0.15, curve: Curves.easeOut);
+  }
+}
+
+class _LocationErrorBanner extends StatelessWidget {
+  const _LocationErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: GlassSurface(
+        borderRadius: 14,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        tint: AppColors.amberWarn.withValues(alpha: 0.12),
+        child: Row(
+          children: [
+            const Icon(Icons.location_off_rounded, size: 16, color: AppColors.amberWarn),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextTheme.caption.copyWith(color: AppColors.amberWarn),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 300.ms);
   }
 }
 

@@ -5,6 +5,12 @@ enum EchoCategory { signal, presence, environment, anomaly }
 /// A single detected point of "invisible" data in physical space, positioned
 /// in polar coordinates relative to the user (angle/distance) with an
 /// additional depth channel for the pseudo-3D parallax effect.
+///
+/// A subset of nodes are also anchored to a real-world [latitude]/[longitude]
+/// and start [isLocked] — these reveal their true [label] only once the
+/// user's live GPS position closes to within the unlock radius (see
+/// `EvaluateSignalProximity`). Ambient-only nodes simply leave the geo
+/// fields null and are never subject to locking.
 class EchoNode {
   const EchoNode({
     required this.id,
@@ -14,6 +20,11 @@ class EchoNode {
     required this.distance,
     required this.depth,
     required this.intensity,
+    this.latitude,
+    this.longitude,
+    this.isLocked = false,
+    this.lockedLabel,
+    this.distanceMeters,
   });
 
   final String id;
@@ -31,4 +42,45 @@ class EchoNode {
 
   /// Normalized signal strength/confidence, 0.0 – 1.0.
   final double intensity;
+
+  /// Real-world anchor point. Null for nodes that aren't geo-locked.
+  final double? latitude;
+  final double? longitude;
+
+  /// Whether this node's true [label] is still hidden behind [lockedLabel].
+  final bool isLocked;
+
+  /// Placeholder shown in place of [label] while [isLocked] is true
+  /// (e.g. "FREQ #409").
+  final String? lockedLabel;
+
+  /// Live great-circle distance from the user to [latitude]/[longitude], in
+  /// meters. Null until a location fix and this node have both been seen.
+  final double? distanceMeters;
+
+  bool get isGeoAnchored => latitude != null && longitude != null;
+
+  /// The label to actually render: the encrypted placeholder while locked,
+  /// otherwise the real [label].
+  String get displayLabel => isLocked ? (lockedLabel ?? label) : label;
+
+  EchoNode copyWith({
+    bool? isLocked,
+    double? distanceMeters,
+  }) {
+    return EchoNode(
+      id: id,
+      label: label,
+      category: category,
+      angleRadians: angleRadians,
+      distance: distance,
+      depth: depth,
+      intensity: intensity,
+      latitude: latitude,
+      longitude: longitude,
+      isLocked: isLocked ?? this.isLocked,
+      lockedLabel: lockedLabel,
+      distanceMeters: distanceMeters ?? this.distanceMeters,
+    );
+  }
 }

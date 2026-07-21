@@ -6,11 +6,15 @@ import 'app_colors.dart';
 /// Central typography scale for EchoLens. UI code must style text through
 /// this class (e.g. `AppTextTheme.hudLabel`) — never inline a raw TextStyle.
 ///
-/// Fonts are fetched at runtime via google_fonts (falls back to a system
-/// font offline, see `GoogleFonts.config.allowRuntimeFetching` in main.dart).
-/// For a release build, prefer bundling the .ttf files under `assets/fonts/`
-/// and declaring them in pubspec.yaml's `fonts:` section instead, so
-/// typography doesn't depend on network access at all.
+/// Fonts are fetched at runtime via google_fonts and cached on-device after
+/// the first successful download. If a fetch fails (offline, DNS failure),
+/// google_fonts logs a warning and silently falls back to the platform's
+/// default font — this is the package's default behavior; do NOT set
+/// `GoogleFonts.config.allowRuntimeFetching = false`, since that instead
+/// makes it throw for any font not already bundled as a local asset. For a
+/// release build that must never depend on network access, bundle the .ttf
+/// files under `assets/fonts/` and declare them in pubspec.yaml's `fonts:`
+/// section instead.
 abstract final class AppTextTheme {
   static TextStyle get display => GoogleFonts.nunito(
     fontSize: 32,
