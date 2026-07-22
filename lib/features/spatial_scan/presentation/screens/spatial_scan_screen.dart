@@ -146,7 +146,7 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _PulseField extends StatelessWidget {
+class _PulseField extends ConsumerStatefulWidget {
   const _PulseField({
     required this.nodes,
     required this.isScanning,
@@ -162,48 +162,112 @@ class _PulseField extends StatelessWidget {
   final ValueChanged<EchoNode> onPlayTap;
 
   @override
+  ConsumerState<_PulseField> createState() => _PulseFieldState();
+}
+
+class _PulseFieldState extends ConsumerState<_PulseField> {
+  final List<UnlockEvent> _shockwaves = [];
+  ProviderSubscription<SpatialScanUiState>? _unlockSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // listenManual (not the ref.listen-in-build form) because this needs to
+    // live for the whole State's lifetime, not re-registered every build —
+    // it drives transient overlay widgets that manage their own removal.
+    _unlockSubscription = ref.listenManual(spatialScanViewModelProvider, (previous, next) {
+      final event = next.unlockEvent;
+      if (event == null || identical(event, previous?.unlockEvent)) return;
+      setState(() => _shockwaves.add(event));
+    });
+  }
+
+  @override
+  void dispose() {
+    _unlockSubscription?.close();
+    super.dispose();
+  }
+
+  void _removeShockwave(UnlockEvent event) {
+    if (mounted) setState(() => _shockwaves.remove(event));
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final radarSize = fieldSize * 0.62;
+    final radarSize = widget.fieldSize * 0.62;
     return SizedBox.square(
-      dimension: fieldSize,
+      dimension: widget.fieldSize,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          PulseCoreRadar(nodes: nodes, isScanning: isScanning, size: radarSize),
-          for (var i = 0; i < nodes.length; i++)
-            _positionedNode(nodes[i], i, fieldSize, radarSize),
+          PulseCoreRadar(nodes: widget.nodes, isScanning: widget.isScanning, size: radarSize),
+          for (var i = 0; i < widget.nodes.length; i++)
+            _positionedNode(widget.nodes[i], i, widget.fieldSize, radarSize),
+          for (final shockwave in _shockwaves)
+            _positionedShockwave(shockwave, widget.fieldSize, radarSize),
         ],
       ),
     );
   }
 
-  Widget _positionedNode(EchoNode node, int index, double fieldSize, double radarSize) {
+  /// Shared with [_positionedShockwave] so the burst lands exactly where
+  /// the card is, using the *same* clamped placement math.
+  Offset _nodeCenter(EchoNode node, double fieldSize, double radarSize) {
     final maxRadius = fieldSize / 2;
-    // Nodes read past the radar's own drawn radius so the glass cards feel
-    // like they float in a layer above the raw scan, not glued to the rings.
-    //
-    // Clamped so the card's bounding box (140 wide, can scale up to ~1.1x by
-    // depth) never crosses the Stack's edge — Stack clips by default, and at
-    // distance ~0.95 (common with the mock data) an unclamped radius pushes
-    // a card's edge past the field boundary, visibly cutting it off.
     const cardHalfWidthAtMaxScale = 140 / 2 * 1.1;
     final maxPlacementRadius = (maxRadius - cardHalfWidthAtMaxScale).clamp(0.0, maxRadius);
     final placementRadius = (node.distance * maxRadius * 1.05).clamp(0.0, maxPlacementRadius);
     final center = fieldSize / 2;
-    final dx = center + cos(node.angleRadians) * placementRadius;
-    final dy = center + sin(node.angleRadians) * placementRadius;
+    return Offset(
+      center + cos(node.angleRadians) * placementRadius,
+      center + sin(node.angleRadians) * placementRadius,
+    );
+  }
+
+  Widget _positionedNode(EchoNode node, int index, double fieldSize, double radarSize) {
+    // Nodes read past the radar's own drawn radius so the glass cards feel
+    // like they float in a layer above the raw scan, not glued to the rings.
+    //
+    // Clamped (inside _nodeCenter) so the card's bounding box (140 wide,
+    // can scale up to ~1.1x by depth) never crosses the Stack's edge —
+    // Stack clips by default, and at distance ~0.95 (common with the mock
+    // data) an unclamped radius pushes a card's edge past the field
+    // boundary, visibly cutting it off.
+    final center = _nodeCenter(node, fieldSize, radarSize);
 
     return Positioned(
-      left: dx - 70,
-      top: dy - 16,
+      left: center.dx - 70,
+      top: center.dy - 16,
       child: SizedBox(
         width: 140,
         child: EchoNodeCard(
           node: node,
           index: index,
-          isPlaying: node.id == playingNodeId,
-          onPlayTap: () => onPlayTap(node),
+          isPlaying: node.id == widget.playingNodeId,
+          onPlayTap: () => widget.onPlayTap(node),
         ),
+      ),
+    );
+  }
+
+  Widget _positionedShockwave(UnlockEvent event, double fieldSize, double radarSize) {
+    final center = _nodeCenter(event.node, fieldSize, radarSize);
+    const baseSize = 56.0;
+    return Positioned(
+      left: center.dx - baseSize / 2,
+      top: center.dy - baseSize / 2,
+      child: IgnorePointer(
+        child: Container(
+          width: baseSize,
+          height: baseSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.signalGreen, width: 2.5),
+          ),
+        )
+            .animate(onComplete: (_) => _removeShockwave(event))
+            .scaleXY(begin: 0.4, end: 4.5, duration: 750.ms, curve: Curves.easeOut)
+            .fadeOut(begin: 0.9, duration: 750.ms, curve: Curves.easeOut),
       ),
     );
   }

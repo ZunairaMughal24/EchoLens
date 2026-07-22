@@ -21,6 +21,17 @@ class LocationFailure {
   final LocationErrorAction action;
 }
 
+/// A one-shot "this node just unlocked" signal for the UI to react to (a
+/// shockwave burst, a card pulse) — deliberately a fresh object identity on
+/// every unlock rather than a plain node reference, so `ref.listen` can
+/// detect "this is a new event" via identity even if the same node were to
+/// unlock again later after re-locking.
+class UnlockEvent {
+  UnlockEvent(this.node) : timestamp = DateTime.now();
+  final EchoNode node;
+  final DateTime timestamp;
+}
+
 class SpatialScanUiState {
   const SpatialScanUiState({
     this.nodes = const [],
@@ -28,6 +39,7 @@ class SpatialScanUiState {
     this.userLocation,
     this.locationFailure,
     this.playingNodeId,
+    this.unlockEvent,
   });
 
   final List<EchoNode> nodes;
@@ -41,12 +53,18 @@ class SpatialScanUiState {
   /// Id of the [EchoNode] currently playing its voice note, if any.
   final String? playingNodeId;
 
+  /// The most recent lock→unlock transition, if any recompute has produced
+  /// one yet. Consumed by the UI via `ref.listen` for one-shot celebration
+  /// effects — see [UnlockEvent].
+  final UnlockEvent? unlockEvent;
+
   SpatialScanUiState copyWith({
     List<EchoNode>? nodes,
     bool? isScanning,
     UserLocation? userLocation,
     Object? locationFailure = _unset,
     Object? playingNodeId = _unset,
+    Object? unlockEvent = _unset,
   }) {
     return SpatialScanUiState(
       nodes: nodes ?? this.nodes,
@@ -58,6 +76,9 @@ class SpatialScanUiState {
       playingNodeId: identical(playingNodeId, _unset)
           ? this.playingNodeId
           : playingNodeId as String?,
+      unlockEvent: identical(unlockEvent, _unset)
+          ? this.unlockEvent
+          : unlockEvent as UnlockEvent?,
     );
   }
 }
@@ -85,8 +106,17 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
 
     void recompute() {
       final updatedNodes = evaluateSignalProximity(_latestRawNodes, _latestUserLocation);
-      _firePulseForNewlyUnlocked(previous: state.nodes, updated: updatedNodes);
-      state = state.copyWith(nodes: updatedNodes, userLocation: _latestUserLocation);
+      final justUnlocked = _findNewlyUnlocked(previous: state.nodes, updated: updatedNodes);
+      if (justUnlocked != null) {
+        HapticFeedback.heavyImpact();
+        state = state.copyWith(
+          nodes: updatedNodes,
+          userLocation: _latestUserLocation,
+          unlockEvent: UnlockEvent(justUnlocked),
+        );
+      } else {
+        state = state.copyWith(nodes: updatedNodes, userLocation: _latestUserLocation);
+      }
     }
 
     _echoSubscription = watchNearbyEchoes().listen((nodes) {
@@ -125,23 +155,22 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
     return const SpatialScanUiState();
   }
 
-  /// Fires a heavy haptic pulse for every geo-anchored node that just
-  /// flipped from locked to unlocked — a node not present in [previous] is
-  /// treated as "was locked" so a signal that unlocks on the very first
-  /// evaluation (e.g. planting one while already standing on it) still
-  /// buzzes, not just ones discovered while already-known-locked.
-  void _firePulseForNewlyUnlocked({
+  /// Finds the first geo-anchored node that just flipped from locked to
+  /// unlocked — a node not present in [previous] is treated as "was
+  /// locked" so a signal that unlocks on the very first evaluation (e.g.
+  /// planting one while already standing on it) still counts, not just
+  /// ones discovered while already-known-locked. Drives both the haptic
+  /// pulse and the celebratory UI effects in [recompute].
+  EchoNode? _findNewlyUnlocked({
     required List<EchoNode> previous,
     required List<EchoNode> updated,
   }) {
     final previousLockById = {for (final node in previous) node.id: node.isLocked};
-    final justUnlocked = updated.any((node) {
-      if (!node.isGeoAnchored || node.isLocked) return false;
-      return previousLockById[node.id] ?? true;
-    });
-    if (justUnlocked) {
-      HapticFeedback.heavyImpact();
+    for (final node in updated) {
+      if (!node.isGeoAnchored || node.isLocked) continue;
+      if (previousLockById[node.id] ?? true) return node;
     }
+    return null;
   }
 
   void toggleScanning() {
