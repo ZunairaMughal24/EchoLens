@@ -14,9 +14,13 @@ import '../../domain/entities/echo_node.dart';
 /// Geo-anchored nodes additionally show a lock/unlock state driven by live
 /// GPS proximity (see EvaluateSignalProximity): the label crossfades from
 /// its encrypted placeholder to the real name the moment the node unlocks,
-/// and the card itself plays a one-shot bounce + glow flash at that exact
-/// instant (see [_unlockPulseController]) — that transition is the app's
-/// actual payoff moment, so it needed to read as one.
+/// and the card plays a one-shot bounce + glow flash at that exact instant
+/// ([_unlockPulseController]) — that transition is the app's actual payoff
+/// moment. After that, as long as the node stays unlocked and its voice
+/// note hasn't been played yet, it keeps a gentle continuous "breathing"
+/// glow going ([_breathingController]) — an unplayed note sitting right
+/// next to the user shouldn't just flash once and go quiet; it should keep
+/// asking to be heard until it actually is.
 class EchoNodeCard extends StatefulWidget {
   const EchoNodeCard({
     super.key,
@@ -40,7 +44,7 @@ class EchoNodeCard extends StatefulWidget {
   State<EchoNodeCard> createState() => _EchoNodeCardState();
 }
 
-class _EchoNodeCardState extends State<EchoNodeCard> with SingleTickerProviderStateMixin {
+class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMixin {
   late final AnimationController _unlockPulseController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 550),
@@ -65,15 +69,51 @@ class _EchoNodeCardState extends State<EchoNodeCard> with SingleTickerProviderSt
     ),
   ]).animate(_unlockPulseController);
 
+  // Continuous "unheard note" indicator. Composes with the one-shot pulse
+  // above rather than replacing it: scale multiplies (both at rest = 1.0,
+  // so it's a no-op when not breathing), glow adds (both at rest = base
+  // alpha, so it's additive on top of whatever the pulse already settled
+  // to).
+  late final AnimationController _breathingController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1300),
+  );
+
+  late final Animation<double> _breathingScale = Tween<double>(begin: 1.0, end: 1.045)
+      .chain(CurveTween(curve: Curves.easeInOut))
+      .animate(_breathingController);
+
+  late final Animation<double> _breathingGlowDelta = Tween<double>(begin: 0.0, end: 0.24)
+      .chain(CurveTween(curve: Curves.easeInOut))
+      .animate(_breathingController);
+
+  /// True once the user has played this unlock's voice note at least once
+  /// — resets on each fresh unlock so walking away and back re-triggers
+  /// the reminder rather than staying silenced forever.
+  bool _hasBeenPlayed = false;
+
+  bool get _shouldBreathe =>
+      widget.node.isGeoAnchored && !widget.node.isLocked && widget.node.hasVoiceNote && !_hasBeenPlayed;
+
+  void _syncBreathing() {
+    if (_shouldBreathe && !_breathingController.isAnimating) {
+      _breathingController.repeat(reverse: true);
+    } else if (!_shouldBreathe && _breathingController.isAnimating) {
+      _breathingController.animateTo(0, duration: 300.ms, curve: Curves.easeOut);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     // A card that's *already* unlocked the first time it's built (e.g.
     // restored on app resume) should just show the resting glow, not
-    // replay the pulse — only a live transition should do that.
+    // replay the pop — only a live transition should do that.
     if (!widget.node.isLocked && widget.node.isGeoAnchored) {
       _unlockPulseController.value = 1.0;
     }
+    _hasBeenPlayed = widget.isPlaying;
+    _syncBreathing();
   }
 
   @override
@@ -82,12 +122,18 @@ class _EchoNodeCardState extends State<EchoNodeCard> with SingleTickerProviderSt
     final justUnlocked = oldWidget.node.isLocked && !widget.node.isLocked;
     if (justUnlocked) {
       _unlockPulseController.forward(from: 0);
+      _hasBeenPlayed = false;
     }
+    if (widget.isPlaying) {
+      _hasBeenPlayed = true;
+    }
+    _syncBreathing();
   }
 
   @override
   void dispose() {
     _unlockPulseController.dispose();
+    _breathingController.dispose();
     super.dispose();
   }
 
@@ -148,7 +194,7 @@ class _EchoNodeCardState extends State<EchoNodeCard> with SingleTickerProviderSt
                 _subtitle(node),
                 style: AppTextTheme.hudLabel.copyWith(
                   fontSize: 9,
-                  color: isUnlocked ? AppColors.signalGreen : AppColors.cyanPulse,
+                  color: _subtitleColor(node),
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
@@ -172,23 +218,28 @@ class _EchoNodeCardState extends State<EchoNodeCard> with SingleTickerProviderSt
 
     return Opacity(
       opacity: depthOpacity,
-      // Both the scale bounce and the glow-flash tint are driven by the
-      // same controller, so one AnimatedBuilder recomputes both per frame.
-      // GlassSurface itself has to be rebuilt each frame (its tint is
-      // changing), but `content` above doesn't need to — passed as
-      // `child` so it's built once and reused across animation frames.
+      // Both controllers drive the same two visual properties (scale,
+      // glow), so one AnimatedBuilder listening to both recomputes them
+      // together each frame. GlassSurface has to rebuild every frame (its
+      // tint is changing), but `content` doesn't — passed as `child` so
+      // it's built once and reused across every animation frame from
+      // either controller.
       child: AnimatedBuilder(
-        animation: _unlockPulseController,
-        builder: (context, child) => Transform.scale(
-          scale: depthScale * _pulseScale.value,
-          child: GlassSurface(
-            borderRadius: 14,
-            blurSigma: 18,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            tint: isUnlocked ? AppColors.signalGreen.withValues(alpha: _glowAlpha.value) : null,
-            child: child!,
-          ),
-        ),
+        animation: Listenable.merge([_unlockPulseController, _breathingController]),
+        builder: (context, child) {
+          final scale = depthScale * _pulseScale.value * _breathingScale.value;
+          final glowAlpha = (_glowAlpha.value + _breathingGlowDelta.value).clamp(0.0, 0.7);
+          return Transform.scale(
+            scale: scale,
+            child: GlassSurface(
+              borderRadius: 14,
+              blurSigma: 18,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              tint: isUnlocked ? AppColors.signalGreen.withValues(alpha: glowAlpha) : null,
+              child: child!,
+            ),
+          );
+        },
         child: content,
       ),
     )
@@ -197,6 +248,17 @@ class _EchoNodeCardState extends State<EchoNodeCard> with SingleTickerProviderSt
         .scale(begin: const Offset(0.7, 0.7), curve: Curves.easeOutBack)
         .then()
         .shimmer(duration: 900.ms, color: AppColors.cyanPulse.withValues(alpha: 0.25));
+  }
+
+  /// Locked/unlocked geo-anchored nodes match their lock icon's color
+  /// (amber pending, green unlocked); ambient nodes reflect their own
+  /// category color instead of a single blanket accent — the "everything
+  /// on this card is cyan" issue, seen across the whole app not just here.
+  Color _subtitleColor(EchoNode node) {
+    if (node.isGeoAnchored) {
+      return node.isLocked ? AppColors.amberWarn : AppColors.signalGreen;
+    }
+    return _colorForCategory(node.category).withValues(alpha: 0.85);
   }
 
   String _subtitle(EchoNode node) {

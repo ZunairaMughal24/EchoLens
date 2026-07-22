@@ -49,11 +49,17 @@ abstract final class AppTextTheme {
   );
 
   /// Monospace readout style for scan data / HUD telemetry.
+  ///
+  /// Neutral by default — this style is reused for nearly every label in
+  /// the app (header subtitles, status panel labels, card subtitles), and
+  /// defaulting it to an accent color meant every one of those was cyan
+  /// with no variation. Accent color is now opt-in via `.copyWith(color:)`
+  /// at the handful of call sites that actually mean to draw the eye.
   static TextStyle get hudLabel => GoogleFonts.jetBrainsMono(
     fontSize: 11,
     fontWeight: FontWeight.w500,
     letterSpacing: 1.2,
-    color: AppColors.cyanPulse,
+    color: AppColors.textMuted,
   );
 
   static TextStyle get hudValue => GoogleFonts.jetBrainsMono(

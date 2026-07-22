@@ -76,12 +76,13 @@ class EchoNode {
     double? distanceMeters,
     double? distance,
     double? depth,
+    double? angleRadians,
   }) {
     return EchoNode(
       id: id,
       label: label,
       category: category,
-      angleRadians: angleRadians,
+      angleRadians: angleRadians ?? this.angleRadians,
       distance: distance ?? this.distance,
       depth: depth ?? this.depth,
       intensity: intensity,

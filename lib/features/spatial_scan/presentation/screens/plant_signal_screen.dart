@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_theme.dart';
 import '../../../../core/widgets/glass_surface.dart';
+import '../../../../core/widgets/nebula_background.dart';
 import '../viewmodels/plant_signal_viewmodel.dart';
 
 /// "Plant an echo": record a short voice note and anchor it to wherever the
@@ -19,8 +20,7 @@ class PlantSignalScreen extends ConsumerWidget {
     final viewModel = ref.read(plantSignalViewModelProvider.notifier);
 
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
+      body: NebulaBackground(
         child: SafeArea(
           child: Column(
             children: [
@@ -171,11 +171,11 @@ class _RecordButton extends StatelessWidget {
           tint: isRecording ? AppColors.magentaEdge.withValues(alpha: 0.18) : null,
           child: Center(
             child: isBusy
-                ? const CircularProgressIndicator(color: AppColors.cyanPulse, strokeWidth: 2)
+                ? const CircularProgressIndicator(color: AppColors.violetGlow, strokeWidth: 2)
                 : Icon(
                     isRecording ? Icons.stop_rounded : Icons.mic_rounded,
                     size: 42,
-                    color: isRecording ? AppColors.magentaEdge : AppColors.cyanPulse,
+                    color: isRecording ? AppColors.magentaEdge : AppColors.violetGlow,
                   ),
           ),
         ),
@@ -235,10 +235,10 @@ class _LabelAndPlantState extends State<_LabelAndPlant> {
           onTap: () => widget.viewModel.plant(label: _controller.text),
           child: GlassSurface(
             borderRadius: 14,
-            tint: AppColors.cyanPulse.withValues(alpha: 0.14),
+            tint: AppColors.violetGlow.withValues(alpha: 0.14),
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Center(
-              child: Text('Plant Echo', style: AppTextTheme.title.copyWith(color: AppColors.cyanPulse)),
+              child: Text('Plant Echo', style: AppTextTheme.title.copyWith(color: AppColors.violetGlow)),
             ),
           ),
         ),
@@ -273,7 +273,7 @@ class _PlantedConfirmation extends StatelessWidget {
           child: GlassSurface(
             borderRadius: 14,
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-            child: Text('Done', style: AppTextTheme.title.copyWith(color: AppColors.cyanPulse)),
+            child: Text('Done', style: AppTextTheme.title.copyWith(color: AppColors.violetGlow)),
           ),
         ),
       ],
