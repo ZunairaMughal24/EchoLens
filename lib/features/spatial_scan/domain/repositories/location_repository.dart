@@ -10,4 +10,10 @@ abstract interface class LocationRepository {
   /// A single current fix — used by the planting flow, which needs "where
   /// am I right now" rather than a continuous stream.
   Future<UserLocation> getCurrentPosition();
+
+  /// Deep-links to the OS's location services toggle (service disabled).
+  Future<void> openLocationSettings();
+
+  /// Deep-links to this app's own permission page (permission denied).
+  Future<void> openAppSettings();
 }

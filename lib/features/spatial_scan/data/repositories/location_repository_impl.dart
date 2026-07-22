@@ -19,6 +19,12 @@ class LocationRepositoryImpl implements LocationRepository {
     return _toUserLocation(await _dataSource.getCurrentPosition());
   }
 
+  @override
+  Future<void> openLocationSettings() => _dataSource.openLocationSettings();
+
+  @override
+  Future<void> openAppSettings() => _dataSource.openAppSettings();
+
   UserLocation _toUserLocation(Position position) => UserLocation(
         latitude: position.latitude,
         longitude: position.longitude,

@@ -12,12 +12,21 @@ import '../../domain/exceptions/location_exceptions.dart';
 /// "explicitly set to null" for nullable fields — see [SpatialScanUiState.copyWith].
 const _unset = Object();
 
+/// Which settings page can actually resolve a given location failure.
+enum LocationErrorAction { openLocationSettings, openAppSettings }
+
+class LocationFailure {
+  const LocationFailure(this.message, this.action);
+  final String message;
+  final LocationErrorAction action;
+}
+
 class SpatialScanUiState {
   const SpatialScanUiState({
     this.nodes = const [],
     this.isScanning = true,
     this.userLocation,
-    this.locationErrorMessage,
+    this.locationFailure,
     this.playingNodeId,
   });
 
@@ -25,9 +34,9 @@ class SpatialScanUiState {
   final bool isScanning;
   final UserLocation? userLocation;
 
-  /// Human-readable message when location permission/service failed. Null
-  /// while everything is fine or a fix simply hasn't arrived yet.
-  final String? locationErrorMessage;
+  /// Set when location permission/service failed. Null while everything is
+  /// fine or a fix simply hasn't arrived yet.
+  final LocationFailure? locationFailure;
 
   /// Id of the [EchoNode] currently playing its voice note, if any.
   final String? playingNodeId;
@@ -36,16 +45,16 @@ class SpatialScanUiState {
     List<EchoNode>? nodes,
     bool? isScanning,
     UserLocation? userLocation,
-    Object? locationErrorMessage = _unset,
+    Object? locationFailure = _unset,
     Object? playingNodeId = _unset,
   }) {
     return SpatialScanUiState(
       nodes: nodes ?? this.nodes,
       isScanning: isScanning ?? this.isScanning,
       userLocation: userLocation ?? this.userLocation,
-      locationErrorMessage: identical(locationErrorMessage, _unset)
-          ? this.locationErrorMessage
-          : locationErrorMessage as String?,
+      locationFailure: identical(locationFailure, _unset)
+          ? this.locationFailure
+          : locationFailure as LocationFailure?,
       playingNodeId: identical(playingNodeId, _unset)
           ? this.playingNodeId
           : playingNodeId as String?,
@@ -88,14 +97,17 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
     _locationSubscription = watchUserLocation().listen(
       (location) {
         _latestUserLocation = location;
-        state = state.copyWith(locationErrorMessage: null);
+        state = state.copyWith(locationFailure: null);
         recompute();
       },
       onError: (Object error) {
         final message = error is LocationException
             ? error.message
             : 'Unable to read device location.';
-        state = state.copyWith(locationErrorMessage: message);
+        final action = error is LocationServiceDisabledException
+            ? LocationErrorAction.openLocationSettings
+            : LocationErrorAction.openAppSettings;
+        state = state.copyWith(locationFailure: LocationFailure(message, action));
       },
     );
 
@@ -134,6 +146,20 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
 
   void toggleScanning() {
     state = state.copyWith(isScanning: !state.isScanning);
+  }
+
+  /// Deep-links to whichever settings page can resolve the current
+  /// [LocationFailure] — called from the SnackBar's action button.
+  Future<void> resolveLocationFailure() async {
+    final action = state.locationFailure?.action;
+    if (action == null) return;
+    final locationRepository = ref.read(locationRepositoryProvider);
+    switch (action) {
+      case LocationErrorAction.openLocationSettings:
+        await locationRepository.openLocationSettings();
+      case LocationErrorAction.openAppSettings:
+        await locationRepository.openAppSettings();
+    }
   }
 
   /// Plays (or, if this node is already playing, stops) a node's voice

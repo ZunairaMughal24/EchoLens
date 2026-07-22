@@ -8,6 +8,8 @@ import '../../domain/exceptions/location_exceptions.dart' as domain;
 abstract interface class LocationDataSource {
   Stream<Position> watchPosition();
   Future<Position> getCurrentPosition();
+  Future<void> openLocationSettings();
+  Future<void> openAppSettings();
 }
 
 /// Wraps `package:geolocator`: initializes permissions cleanly before ever
@@ -35,6 +37,16 @@ class GeolocatorLocationDataSource implements LocationDataSource {
   Future<Position> getCurrentPosition() async {
     await _ensurePermission();
     return Geolocator.getCurrentPosition(locationSettings: _settings);
+  }
+
+  @override
+  Future<void> openLocationSettings() async {
+    await Geolocator.openLocationSettings();
+  }
+
+  @override
+  Future<void> openAppSettings() async {
+    await Geolocator.openAppSettings();
   }
 
   Future<void> _ensurePermission() async {

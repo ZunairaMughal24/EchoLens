@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import '../models/echo_node_model.dart';
+import '../services/local_signal_store.dart';
 import '../../domain/entities/echo_node.dart';
 
 abstract interface class EchoScanDataSource {
@@ -23,7 +24,9 @@ abstract interface class EchoScanDataSource {
 /// app-lifetime provider, so the scan screen and the planting flow always
 /// share the same instance.
 class MockEchoScanDataSource implements EchoScanDataSource {
-  MockEchoScanDataSource({Random? random}) : _random = random ?? Random() {
+  MockEchoScanDataSource({Random? random, LocalSignalStore? signalStore})
+      : _random = random ?? Random(),
+        _signalStore = signalStore ?? LocalSignalStore() {
     _nodes = List.generate(6, (i) => _seedNode(i));
     _controller = StreamController<List<EchoNodeModel>>.broadcast(
       onListen: () {
@@ -34,10 +37,16 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       },
       onCancel: () => _ticker?.cancel(),
     );
+    // Fire-and-forget: restoring planted echoes shouldn't block the radar
+    // from showing the ambient seeds immediately. They join the pool (and
+    // get broadcast to whoever's already listening) a moment later.
+    unawaited(_restorePersistedNodes());
   }
 
   final Random _random;
+  final LocalSignalStore _signalStore;
   late List<EchoNodeModel> _nodes;
+  final List<EchoNodeModel> _plantedNodes = [];
   late final StreamController<List<EchoNodeModel>> _controller;
   Timer? _ticker;
 
@@ -73,6 +82,16 @@ class MockEchoScanDataSource implements EchoScanDataSource {
   @override
   void plantNode(EchoNodeModel node) {
     _nodes = [..._nodes, node];
+    _plantedNodes.add(node);
+    _controller.add(_nodes);
+    unawaited(_signalStore.savePlantedNodes(_plantedNodes));
+  }
+
+  Future<void> _restorePersistedNodes() async {
+    final persisted = await _signalStore.loadPlantedNodes();
+    if (persisted.isEmpty) return;
+    _plantedNodes.addAll(persisted);
+    _nodes = [..._nodes, ...persisted];
     _controller.add(_nodes);
   }
 

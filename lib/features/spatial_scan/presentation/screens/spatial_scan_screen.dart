@@ -24,6 +24,28 @@ class SpatialScanScreen extends ConsumerWidget {
     final state = ref.watch(spatialScanViewModelProvider);
     final viewModel = ref.read(spatialScanViewModelProvider.notifier);
 
+    // One-shot side effect on state *changes* (not current state) — a
+    // persistent banner sat under the header indefinitely; a SnackBar with
+    // a direct settings action is less intrusive and actually actionable.
+    ref.listen(spatialScanViewModelProvider, (previous, next) {
+      final failure = next.locationFailure;
+      if (failure == null) return;
+      if (previous?.locationFailure?.message == failure.message) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(failure.message, style: AppTextTheme.body.copyWith(color: AppColors.textPrimary)),
+          backgroundColor: AppColors.nebulaSurface,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: failure.action == LocationErrorAction.openLocationSettings ? 'ENABLE' : 'SETTINGS',
+            textColor: AppColors.cyanPulse,
+            onPressed: viewModel.resolveLocationFailure,
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    });
+
     return Scaffold(
       body: DecoratedBox(
         decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
@@ -40,8 +62,6 @@ class SpatialScanScreen extends ConsumerWidget {
                       MaterialPageRoute(builder: (_) => const PlantSignalScreen()),
                     ),
                   ),
-                  if (state.locationErrorMessage != null)
-                    _LocationErrorBanner(message: state.locationErrorMessage!),
                   Expanded(
                     child: Center(
                       child: _PulseField(
@@ -123,36 +143,6 @@ class _Header extends StatelessWidget {
         ],
       ),
     ).animate().fadeIn(duration: 500.ms).slideY(begin: -0.15, curve: Curves.easeOut);
-  }
-}
-
-class _LocationErrorBanner extends StatelessWidget {
-  const _LocationErrorBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      child: GlassSurface(
-        borderRadius: 14,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        tint: AppColors.amberWarn.withValues(alpha: 0.12),
-        child: Row(
-          children: [
-            const Icon(Icons.location_off_rounded, size: 16, color: AppColors.amberWarn),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: AppTextTheme.caption.copyWith(color: AppColors.amberWarn),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ).animate().fadeIn(duration: 300.ms);
   }
 }
 
