@@ -16,17 +16,21 @@ import '../../domain/entities/echo_node.dart';
 /// its encrypted placeholder to the real name the moment the node unlocks,
 /// and the card plays a one-shot bounce + glow flash at that exact instant
 /// ([_unlockPulseController]) — that transition is the app's actual payoff
-/// moment. After that, as long as the node stays unlocked and its voice
-/// note hasn't been played yet, it keeps a gentle continuous "breathing"
-/// glow going ([_breathingController]) — an unplayed note sitting right
-/// next to the user shouldn't just flash once and go quiet; it should keep
-/// asking to be heard until it actually is.
+/// moment. After that, as long as [hasBeenPlayed] is false, it keeps a
+/// gentle continuous "breathing" glow going ([_breathingController]) — an
+/// unplayed note sitting right next to the user shouldn't just flash once
+/// and go quiet; it should keep asking to be heard until it actually is.
+/// [hasBeenPlayed] is owned by the ViewModel (not tracked locally here) so
+/// this card and the radar's repeating bloom effect ([_BloomPulse] in
+/// spatial_scan_screen.dart) read the exact same "has this been heard"
+/// state and stop together.
 class EchoNodeCard extends StatefulWidget {
   const EchoNodeCard({
     super.key,
     required this.node,
     required this.index,
     this.isPlaying = false,
+    this.hasBeenPlayed = false,
     this.onPlayTap,
   });
 
@@ -35,6 +39,10 @@ class EchoNodeCard extends StatefulWidget {
 
   /// Whether this node's voice note is the one currently playing.
   final bool isPlaying;
+
+  /// Whether this node's voice note has been played at least once since
+  /// its most recent unlock — see [SpatialScanUiState.playedNodeIds].
+  final bool hasBeenPlayed;
 
   /// Called when the play/stop affordance is tapped. Only shown for
   /// unlocked nodes with a voice note attached.
@@ -87,13 +95,8 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
       .chain(CurveTween(curve: Curves.easeInOut))
       .animate(_breathingController);
 
-  /// True once the user has played this unlock's voice note at least once
-  /// — resets on each fresh unlock so walking away and back re-triggers
-  /// the reminder rather than staying silenced forever.
-  bool _hasBeenPlayed = false;
-
   bool get _shouldBreathe =>
-      widget.node.isGeoAnchored && !widget.node.isLocked && widget.node.hasVoiceNote && !_hasBeenPlayed;
+      widget.node.isGeoAnchored && !widget.node.isLocked && widget.node.hasVoiceNote && !widget.hasBeenPlayed;
 
   void _syncBreathing() {
     if (_shouldBreathe && !_breathingController.isAnimating) {
@@ -112,7 +115,6 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
     if (!widget.node.isLocked && widget.node.isGeoAnchored) {
       _unlockPulseController.value = 1.0;
     }
-    _hasBeenPlayed = widget.isPlaying;
     _syncBreathing();
   }
 
@@ -122,10 +124,6 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
     final justUnlocked = oldWidget.node.isLocked && !widget.node.isLocked;
     if (justUnlocked) {
       _unlockPulseController.forward(from: 0);
-      _hasBeenPlayed = false;
-    }
-    if (widget.isPlaying) {
-      _hasBeenPlayed = true;
     }
     _syncBreathing();
   }
@@ -182,7 +180,7 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
                       child: Text(
                         node.displayLabel,
                         key: ValueKey(node.displayLabel),
-                        style: AppTextTheme.title.copyWith(fontSize: 12),
+                        style: AppTextTheme.cardLabel.copyWith(fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                       ),
@@ -206,10 +204,19 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
           const SizedBox(width: 6),
           GestureDetector(
             onTap: widget.onPlayTap,
-            child: Icon(
-              widget.isPlaying ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
-              size: 20,
-              color: AppColors.signalGreen,
+            // Was a bare Icon with no container — every other tappable
+            // icon in the app (header buttons, plant screen controls) is
+            // a rounded glass box; this one wasn't. Small blurSigma since
+            // it's a compact ~28px button, not a full-size button.
+            child: GlassSurface(
+              borderRadius: 14,
+              blurSigma: 10,
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                widget.isPlaying ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
+                size: 20,
+                color: AppColors.signalGreen,
+              ),
             ),
           ),
         ],

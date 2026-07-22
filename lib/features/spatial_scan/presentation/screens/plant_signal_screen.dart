@@ -74,7 +74,8 @@ class _Header extends StatelessWidget {
                 Text('Plant an Echo', style: AppTextTheme.headline, overflow: TextOverflow.ellipsis),
                 Text(
                   'LEAVE A VOICE NOTE HERE',
-                  style: AppTextTheme.hudLabel,
+                  // Matches the main screen's header subtitle treatment.
+                  style: AppTextTheme.caption.copyWith(letterSpacing: 1.2),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

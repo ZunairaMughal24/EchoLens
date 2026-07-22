@@ -23,29 +23,39 @@ abstract final class AppTextTheme {
     color: AppColors.textPrimary,
   );
 
-  static TextStyle get headline => GoogleFonts.sora(
+  static TextStyle get headline => GoogleFonts.nunito(
     fontSize: 22,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle get title => GoogleFonts.sora(
+  static TextStyle get title => GoogleFonts.nunito(
     fontSize: 16,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
   );
 
-  static TextStyle get body => GoogleFonts.sora(
+  static TextStyle get body => GoogleFonts.nunito(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
     height: 1.4,
   );
 
-  static TextStyle get caption => GoogleFonts.sora(
+  static TextStyle get caption => GoogleFonts.nunito(
     fontSize: 12,
     fontWeight: FontWeight.w400,
     color: AppColors.textMuted,
+  );
+
+  /// Sora, not Nunito — deliberately kept apart from [title] on request
+  /// ("leave the boxes") so the floating glass card labels don't move when
+  /// the rest of the app's typography changes. Same size/weight [title]
+  /// used to be before this split.
+  static TextStyle get cardLabel => GoogleFonts.sora(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
   );
 
   /// Monospace readout style for scan data / HUD telemetry.

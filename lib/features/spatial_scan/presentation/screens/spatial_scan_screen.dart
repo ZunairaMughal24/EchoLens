@@ -94,6 +94,7 @@ class SpatialScanScreen extends ConsumerWidget {
                         isScanning: state.isScanning,
                         fieldSize: fieldSize,
                         playingNodeId: state.playingNodeId,
+                        playedNodeIds: state.playedNodeIds,
                         onPlayTap: viewModel.playSignal,
                       ),
                     ),
@@ -145,7 +146,11 @@ class _Header extends StatelessWidget {
                     ),
                     Text(
                       'SCANNING PHYSICAL SPACE',
-                      style: AppTextTheme.hudLabel,
+                      // caption (Nunito) rather than hudLabel: header and
+                      // status panel are Nunito per request — hudLabel
+                      // stays monospace since the card subtitle still uses
+                      // it and that's meant to stay untouched.
+                      style: AppTextTheme.caption.copyWith(letterSpacing: 1.2),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -198,12 +203,13 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _PulseField extends ConsumerStatefulWidget {
+class _PulseField extends StatelessWidget {
   const _PulseField({
     required this.nodes,
     required this.isScanning,
     required this.fieldSize,
     required this.playingNodeId,
+    required this.playedNodeIds,
     required this.onPlayTap,
   });
 
@@ -211,72 +217,8 @@ class _PulseField extends ConsumerStatefulWidget {
   final bool isScanning;
   final double fieldSize;
   final String? playingNodeId;
+  final Set<String> playedNodeIds;
   final ValueChanged<EchoNode> onPlayTap;
-
-  @override
-  ConsumerState<_PulseField> createState() => _PulseFieldState();
-}
-
-class _PulseFieldState extends ConsumerState<_PulseField> {
-  final List<UnlockEvent> _shockwaves = [];
-  ProviderSubscription<SpatialScanUiState>? _unlockSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    // listenManual (not the ref.listen-in-build form) because this needs to
-    // live for the whole State's lifetime, not re-registered every build —
-    // it drives transient overlay widgets that manage their own removal.
-    _unlockSubscription = ref.listenManual(spatialScanViewModelProvider, (
-      previous,
-      next,
-    ) {
-      final event = next.unlockEvent;
-      if (event == null || identical(event, previous?.unlockEvent)) return;
-      setState(() => _shockwaves.add(event));
-    });
-  }
-
-  @override
-  void dispose() {
-    _unlockSubscription?.close();
-    super.dispose();
-  }
-
-  void _removeShockwave(UnlockEvent event) {
-    if (mounted) setState(() => _shockwaves.remove(event));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 0.86 (was 0.62): the drawn radar disk itself now fills most of the
-    // field rather than being a noticeably smaller circle floating inside
-    // a mostly-empty square. Card placement math is unaffected — it's
-    // driven by fieldSize, not radarSize, so this doesn't change how
-    // cards are laid out or clamped, only how big the radar reads visually.
-    final radarSize = widget.fieldSize * 0.85;
-    // Declutter every build (cheap: a handful of nodes, a few passes) so
-    // the radar dot and its card always agree — both are derived from
-    // this same adjusted list, never the raw widget.nodes directly.
-    final nodes = _declutterNodes(widget.nodes, widget.fieldSize);
-    return SizedBox.square(
-      dimension: widget.fieldSize,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          PulseCoreRadar(
-            nodes: nodes,
-            isScanning: widget.isScanning,
-            size: radarSize,
-          ),
-          for (var i = 0; i < nodes.length; i++)
-            _positionedNode(nodes[i], i, widget.fieldSize, radarSize),
-          for (final shockwave in _shockwaves)
-            _positionedShockwave(shockwave, widget.fieldSize, radarSize),
-        ],
-      ),
-    );
-  }
 
   /// Nudges node angles apart when their projected radar positions would
   /// overlap, so glass cards never stack on each other. Radius (how far
@@ -336,8 +278,48 @@ class _PulseFieldState extends ConsumerState<_PulseField> {
     ];
   }
 
-  /// Shared with [_positionedShockwave] so the burst lands exactly where
-  /// the card is, using the *same* clamped placement math.
+  bool _shouldBloom(EchoNode node) =>
+      node.isGeoAnchored && !node.isLocked && node.hasVoiceNote && !playedNodeIds.contains(node.id);
+
+  @override
+  Widget build(BuildContext context) {
+    // 0.86 (was 0.62): the drawn radar disk itself now fills most of the
+    // field rather than being a noticeably smaller circle floating inside
+    // a mostly-empty square. Card placement math is unaffected — it's
+    // driven by fieldSize, not radarSize, so this doesn't change how
+    // cards are laid out or clamped, only how big the radar reads visually.
+    final radarSize = fieldSize * 0.85;
+    // Declutter every build (cheap: a handful of nodes, a few passes) so
+    // the radar dot and its card always agree — both are derived from
+    // this same adjusted list, never the raw widget.nodes directly.
+    final declutteredNodes = _declutterNodes(nodes, fieldSize);
+    return SizedBox.square(
+      dimension: fieldSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          PulseCoreRadar(
+            nodes: declutteredNodes,
+            isScanning: isScanning,
+            size: radarSize,
+          ),
+          // Bloom is purely derived from each node's current state, not a
+          // triggered "event" — so it needs no listener/list bookkeeping.
+          // A node either currently qualifies (renders, animating) or it
+          // doesn't (isn't in the tree at all), so the repeating bloom
+          // naturally starts the instant a node unlocks and stops the
+          // instant it's played, just by mounting/unmounting.
+          for (final node in declutteredNodes)
+            if (_shouldBloom(node)) _positionedBloom(node, fieldSize, radarSize),
+          for (var i = 0; i < declutteredNodes.length; i++)
+            _positionedNode(declutteredNodes[i], i, fieldSize, radarSize),
+        ],
+      ),
+    );
+  }
+
+  /// Shared with [_positionedBloom] so the bloom lands exactly where the
+  /// card is, using the *same* clamped placement math.
   Offset _nodeCenter(EchoNode node, double fieldSize, double radarSize) {
     final maxRadius = fieldSize / 2;
     const cardHalfWidthAtMaxScale = 140 / 2 * 1.1;
@@ -387,44 +369,80 @@ class _PulseFieldState extends ConsumerState<_PulseField> {
         child: EchoNodeCard(
           node: node,
           index: index,
-          isPlaying: node.id == widget.playingNodeId,
-          onPlayTap: () => widget.onPlayTap(node),
+          isPlaying: node.id == playingNodeId,
+          hasBeenPlayed: playedNodeIds.contains(node.id),
+          onPlayTap: () => onPlayTap(node),
         ),
       ),
     );
   }
 
-  Widget _positionedShockwave(
-    UnlockEvent event,
-    double fieldSize,
-    double radarSize,
-  ) {
-    final center = _nodeCenter(event.node, fieldSize, radarSize);
+  Widget _positionedBloom(EchoNode node, double fieldSize, double radarSize) {
+    final center = _nodeCenter(node, fieldSize, radarSize);
     const baseSize = 56.0;
     return Positioned(
+      key: ValueKey('bloom_${node.id}'),
       left: center.dx - baseSize / 2,
       top: center.dy - baseSize / 2,
-      child: IgnorePointer(
-        child:
-            Container(
-                  width: baseSize,
-                  height: baseSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.signalGreen,
-                      width: 2.5,
-                    ),
-                  ),
-                )
-                .animate(onComplete: (_) => _removeShockwave(event))
-                .scaleXY(
-                  begin: 0.4,
-                  end: 4.5,
-                  duration: 750.ms,
-                  curve: Curves.easeOut,
-                )
-                .fadeOut(begin: 0.9, duration: 750.ms, curve: Curves.easeOut),
+      child: _BloomPulse(color: AppColors.signalGreen, size: baseSize),
+    );
+  }
+}
+
+/// A ring that expands outward and fades, then resets and blooms again —
+/// repeating for as long as it's mounted. Deliberately driven by presence
+/// in the widget tree rather than an internal "active" flag: [_PulseField]
+/// only includes this for nodes that currently qualify (unlocked, has a
+/// voice note, not yet played), so it starts the instant a node unlocks
+/// and stops — its AnimationController disposed along with it — the
+/// instant that condition stops holding, with no separate synchronization
+/// logic needed here.
+class _BloomPulse extends StatefulWidget {
+  const _BloomPulse({required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  State<_BloomPulse> createState() => _BloomPulseState();
+}
+
+class _BloomPulseState extends State<_BloomPulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final t = _controller.value;
+          final scale = 0.5 + t * 3.1;
+          final opacity = (1 - t) * 0.85;
+          return Opacity(
+            opacity: opacity,
+            child: Transform.scale(
+              scale: scale,
+              child: Container(
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: widget.color, width: 2.5),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -489,11 +507,14 @@ class _StatusReadout extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: AppTextTheme.hudLabel.copyWith(fontSize: 9)),
+        // caption/title (Nunito), not hudLabel/hudValue — this is "the
+        // bottom widget where we show live," explicitly asked to be
+        // Nunito, distinct from the card subtitles which stay monospace.
+        Text(label, style: AppTextTheme.caption.copyWith(fontSize: 9, letterSpacing: 1.2)),
         const SizedBox(height: 2),
         Text(
           value,
-          style: AppTextTheme.hudValue.copyWith(
+          style: AppTextTheme.title.copyWith(
             fontSize: 16,
             color: valueColor,
           ),

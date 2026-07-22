@@ -21,17 +21,6 @@ class LocationFailure {
   final LocationErrorAction action;
 }
 
-/// A one-shot "this node just unlocked" signal for the UI to react to (a
-/// shockwave burst, a card pulse) — deliberately a fresh object identity on
-/// every unlock rather than a plain node reference, so `ref.listen` can
-/// detect "this is a new event" via identity even if the same node were to
-/// unlock again later after re-locking.
-class UnlockEvent {
-  UnlockEvent(this.node) : timestamp = DateTime.now();
-  final EchoNode node;
-  final DateTime timestamp;
-}
-
 class SpatialScanUiState {
   const SpatialScanUiState({
     this.nodes = const [],
@@ -39,7 +28,7 @@ class SpatialScanUiState {
     this.userLocation,
     this.locationFailure,
     this.playingNodeId,
-    this.unlockEvent,
+    this.playedNodeIds = const {},
   });
 
   final List<EchoNode> nodes;
@@ -53,10 +42,15 @@ class SpatialScanUiState {
   /// Id of the [EchoNode] currently playing its voice note, if any.
   final String? playingNodeId;
 
-  /// The most recent lock→unlock transition, if any recompute has produced
-  /// one yet. Consumed by the UI via `ref.listen` for one-shot celebration
-  /// effects — see [UnlockEvent].
-  final UnlockEvent? unlockEvent;
+  /// Ids of nodes whose voice note has been played at least once *since
+  /// their most recent unlock*. Single source of truth for "should this
+  /// node still be nagging to be heard" — both the card's breathing glow
+  /// and the radar's repeating bloom read this, so they stay in sync
+  /// instead of each tracking their own local "have I been played" flag.
+  /// Cleared for a node the moment it re-unlocks (see [_findNewlyUnlocked]
+  /// usage in [recompute]), so walking away and back re-triggers the
+  /// reminder rather than silencing it forever after the first listen.
+  final Set<String> playedNodeIds;
 
   SpatialScanUiState copyWith({
     List<EchoNode>? nodes,
@@ -64,7 +58,7 @@ class SpatialScanUiState {
     UserLocation? userLocation,
     Object? locationFailure = _unset,
     Object? playingNodeId = _unset,
-    Object? unlockEvent = _unset,
+    Set<String>? playedNodeIds,
   }) {
     return SpatialScanUiState(
       nodes: nodes ?? this.nodes,
@@ -76,9 +70,7 @@ class SpatialScanUiState {
       playingNodeId: identical(playingNodeId, _unset)
           ? this.playingNodeId
           : playingNodeId as String?,
-      unlockEvent: identical(unlockEvent, _unset)
-          ? this.unlockEvent
-          : unlockEvent as UnlockEvent?,
+      playedNodeIds: playedNodeIds ?? this.playedNodeIds,
     );
   }
 }
@@ -112,7 +104,9 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
         state = state.copyWith(
           nodes: updatedNodes,
           userLocation: _latestUserLocation,
-          unlockEvent: UnlockEvent(justUnlocked),
+          // Fresh unlock — clear any stale "already played" mark so the
+          // breathing/bloom reminder starts again for this visit.
+          playedNodeIds: {...state.playedNodeIds}..remove(justUnlocked.id),
         );
       } else {
         state = state.copyWith(nodes: updatedNodes, userLocation: _latestUserLocation);
@@ -160,7 +154,7 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
   /// locked" so a signal that unlocks on the very first evaluation (e.g.
   /// planting one while already standing on it) still counts, not just
   /// ones discovered while already-known-locked. Drives both the haptic
-  /// pulse and the celebratory UI effects in [recompute].
+  /// pulse and clearing [SpatialScanUiState.playedNodeIds] in [recompute].
   EchoNode? _findNewlyUnlocked({
     required List<EchoNode> previous,
     required List<EchoNode> updated,
@@ -204,7 +198,10 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
       state = state.copyWith(playingNodeId: null);
       return;
     }
-    state = state.copyWith(playingNodeId: node.id);
+    state = state.copyWith(
+      playingNodeId: node.id,
+      playedNodeIds: {...state.playedNodeIds, node.id},
+    );
     await audioPlayer.play(path);
   }
 }
