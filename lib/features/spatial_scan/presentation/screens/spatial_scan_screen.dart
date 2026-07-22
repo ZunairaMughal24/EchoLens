@@ -302,6 +302,15 @@ class _PulseField extends StatelessWidget {
             isScanning: isScanning,
             size: radarSize,
           ),
+          // Not wrapped in Positioned — the Stack's own
+          // `alignment: Alignment.center` lands this exactly on the radar's
+          // visual center with no offset math needed, same spot the core
+          // glow occupies. Explicit "you are here" reference point: before
+          // this, the center was just ambient glow, nothing concretely read
+          // as the user's own live position the way each node dot reads as
+          // an echo's position — which is what actually makes a node's
+          // inward drift toward center legible as "I'm getting closer."
+          _SelfPositionMarker(isScanning: isScanning),
           // Bloom is purely derived from each node's current state, not a
           // triggered "event" — so it needs no listener/list bookkeeping.
           // A node either currently qualifies (renders, animating) or it
@@ -442,6 +451,106 @@ class _BloomPulseState extends State<_BloomPulse> with SingleTickerProviderState
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// A crisp white "you are here" dot with a slow outward sonar-style pulse
+/// ring, centered on the radar. Deliberately white/[AppColors.textPrimary],
+/// not cyan — the ambient core glow and sweep are already cyan, so a cyan
+/// marker here would just blend into them instead of reading as a distinct
+/// "this one is you" reference point. Pauses in step with the radar's own
+/// sweep when scanning is paused, rather than pulsing on regardless.
+class _SelfPositionMarker extends StatefulWidget {
+  const _SelfPositionMarker({required this.isScanning});
+
+  final bool isScanning;
+
+  @override
+  State<_SelfPositionMarker> createState() => _SelfPositionMarkerState();
+}
+
+class _SelfPositionMarkerState extends State<_SelfPositionMarker>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isScanning) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelfPositionMarker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isScanning && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.isScanning && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final t = _controller.value;
+          return SizedBox(
+            width: 64,
+            height: 64,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Opacity(
+                  opacity: (1 - t) * 0.6,
+                  child: Transform.scale(
+                    scale: 0.3 + t * 1.7,
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.textPrimary,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                child!,
+              ],
+            ),
+          );
+        },
+        // Built once, reused every frame — only the ring around it animates.
+        child: Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.textPrimary,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.textPrimary.withValues(alpha: 0.8),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
