@@ -163,12 +163,14 @@ class _Header extends StatelessWidget {
                     onTap: onPlant,
                     // Violet, not cyan — plant/create reads as its own action
                     // distinct from scanning, not just another cyan button.
+                    //
+                    // Square-with-rounded-corners, not a circle: padding is
+                    // now symmetric (was horizontal:14/vertical:10, which
+                    // made a wide rectangle that a large radius then read
+                    // as a pill) and radius dropped from 30 to 12.
                     child: GlassSurface(
-                      borderRadius: 30,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
+                      borderRadius: 12,
+                      padding: const EdgeInsets.all(10),
                       child: const Icon(
                         Icons.add_rounded,
                         color: AppColors.violetGlow,
@@ -179,11 +181,8 @@ class _Header extends StatelessWidget {
                   GestureDetector(
                     onTap: onToggle,
                     child: GlassSurface(
-                      borderRadius: 30,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
+                      borderRadius: 12,
+                      padding: const EdgeInsets.all(10),
                       child: Icon(
                         isScanning
                             ? Icons.pause_rounded

@@ -35,11 +35,17 @@ class PlantSignalScreen extends ConsumerWidget {
                   builder: (context, constraints) {
                     return SingleChildScrollView(
                       child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
                         child: Center(
                           child: switch (state.status) {
-                            RecordingStatus.planted => const _PlantedConfirmation(),
-                            _ => _RecordingPanel(state: state, viewModel: viewModel),
+                            RecordingStatus.planted =>
+                              const _PlantedConfirmation(),
+                            _ => _RecordingPanel(
+                              state: state,
+                              viewModel: viewModel,
+                            ),
                           },
                         ),
                       ),
@@ -71,7 +77,11 @@ class _Header extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Plant an Echo', style: AppTextTheme.headline, overflow: TextOverflow.ellipsis),
+                Text(
+                  'Plant an Echo',
+                  style: AppTextTheme.headline,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 Text(
                   'LEAVE A VOICE NOTE HERE',
                   // Matches the main screen's header subtitle treatment.
@@ -84,10 +94,16 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 12),
           GestureDetector(
             onTap: onClose,
+            // 12, not 30 — a square-with-rounded-corners badge, not a
+            // circle (padding is already symmetric, so it's the radius
+            // alone that was making this read as a circle before).
             child: GlassSurface(
-              borderRadius: 30,
+              borderRadius: 12,
               padding: const EdgeInsets.all(10),
-              child: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+              child: const Icon(
+                Icons.close_rounded,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -125,7 +141,11 @@ class _RecordingPanel extends StatelessWidget {
             },
           ),
           const SizedBox(height: 24),
-          Text(_statusLabel(state.status), style: AppTextTheme.body, textAlign: TextAlign.center),
+          Text(
+            _statusLabel(state.status),
+            style: AppTextTheme.body,
+            textAlign: TextAlign.center,
+          ),
           if (state.errorMessage != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -144,17 +164,21 @@ class _RecordingPanel extends StatelessWidget {
   }
 
   String _statusLabel(RecordingStatus status) => switch (status) {
-        RecordingStatus.idle => 'Tap the mic to record a short voice note.',
-        RecordingStatus.recording => 'Recording… tap again to stop.',
-        RecordingStatus.recorded => 'Recorded. Name your echo and plant it here.',
-        RecordingStatus.planting => 'Anchoring to your current location…',
-        RecordingStatus.error => 'Something went wrong.',
-        RecordingStatus.planted => '',
-      };
+    RecordingStatus.idle => 'Tap the mic to record a short voice note.',
+    RecordingStatus.recording => 'Recording… tap again to stop.',
+    RecordingStatus.recorded => 'Recorded. Name your echo and plant it here.',
+    RecordingStatus.planting => 'Anchoring to your current location…',
+    RecordingStatus.error => 'Something went wrong.',
+    RecordingStatus.planted => '',
+  };
 }
 
 class _RecordButton extends StatelessWidget {
-  const _RecordButton({required this.isRecording, required this.isBusy, required this.onTap});
+  const _RecordButton({
+    required this.isRecording,
+    required this.isBusy,
+    required this.onTap,
+  });
 
   final bool isRecording;
   final bool isBusy;
@@ -169,14 +193,21 @@ class _RecordButton extends StatelessWidget {
         child: GlassSurface(
           borderRadius: 70,
           blurSigma: 20,
-          tint: isRecording ? AppColors.magentaEdge.withValues(alpha: 0.18) : null,
+          tint: isRecording
+              ? AppColors.magentaEdge.withValues(alpha: 0.18)
+              : null,
           child: Center(
             child: isBusy
-                ? const CircularProgressIndicator(color: AppColors.violetGlow, strokeWidth: 2)
+                ? const CircularProgressIndicator(
+                    color: AppColors.violetGlow,
+                    strokeWidth: 2,
+                  )
                 : Icon(
                     isRecording ? Icons.stop_rounded : Icons.mic_rounded,
                     size: 42,
-                    color: isRecording ? AppColors.magentaEdge : AppColors.violetGlow,
+                    color: isRecording
+                        ? AppColors.magentaEdge
+                        : AppColors.violetGlow,
                   ),
           ),
         ),
@@ -239,7 +270,10 @@ class _LabelAndPlantState extends State<_LabelAndPlant> {
             tint: AppColors.violetGlow.withValues(alpha: 0.14),
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Center(
-              child: Text('Plant Echo', style: AppTextTheme.title.copyWith(color: AppColors.violetGlow)),
+              child: Text(
+                'Plant Echo',
+                style: AppTextTheme.title.copyWith(color: AppColors.violetGlow),
+              ),
             ),
           ),
         ),
@@ -256,12 +290,29 @@ class _PlantedConfirmation extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.check_circle_rounded, size: 64, color: AppColors.signalGreen)
+        // Was a bare Icon — the one icon on this screen still missing the
+        // rounded glass treatment everything else has. Sized as a circular
+        // badge (padding + borderRadius = half the resulting box) rather
+        // than a rectangle, matching the icon-button rounding language
+        // used elsewhere (mic button, close button).
+        GlassSurface(
+              borderRadius: 52,
+              padding: const EdgeInsets.all(10),
+              tint: AppColors.signalGreen.withValues(alpha: 0.14),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                size: 64,
+                color: AppColors.signalGreen,
+              ),
+            )
             .animate()
             .scale(begin: const Offset(0.5, 0.5), curve: Curves.easeOutBack)
             .fadeIn(),
         const SizedBox(height: 16),
-        Text('Echo planted', style: AppTextTheme.headline).animate().fadeIn(delay: 150.ms),
+        Text(
+          'Echo planted',
+          style: AppTextTheme.headline,
+        ).animate().fadeIn(delay: 150.ms),
         const SizedBox(height: 4),
         Text(
           'Anyone scanning within 5m will unlock it.',
@@ -274,7 +325,10 @@ class _PlantedConfirmation extends StatelessWidget {
           child: GlassSurface(
             borderRadius: 14,
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-            child: Text('Done', style: AppTextTheme.title.copyWith(color: AppColors.violetGlow)),
+            child: Text(
+              'Done',
+              style: AppTextTheme.title.copyWith(color: AppColors.violetGlow),
+            ),
           ),
         ),
       ],
