@@ -5,7 +5,10 @@ import '../domain/repositories/location_repository.dart';
 import '../domain/repositories/signal_repository.dart';
 import '../domain/services/audio_player.dart';
 import '../domain/services/audio_recorder.dart';
+import '../domain/services/bearing_calculator.dart';
 import '../domain/services/distance_calculator.dart';
+import '../domain/services/heading_provider.dart';
+import '../domain/usecases/calculate_guidance_bearing.dart';
 import '../domain/usecases/evaluate_signal_proximity.dart';
 import '../domain/usecases/get_current_user_location.dart';
 import '../domain/usecases/plant_signal.dart';
@@ -17,6 +20,8 @@ import 'repositories/echo_scan_repository_impl.dart';
 import 'repositories/location_repository_impl.dart';
 import 'repositories/signal_repository_impl.dart';
 import 'services/audioplayers_signal_player.dart';
+import 'services/flutter_compass_heading_provider.dart';
+import 'services/geolocator_bearing_calculator.dart';
 import 'services/geolocator_distance_calculator.dart';
 import 'services/record_audio_recorder.dart';
 
@@ -79,4 +84,23 @@ final plantSignalProvider = Provider(
     ref.watch(getCurrentUserLocationProvider),
     ref.watch(signalRepositoryProvider),
   ),
+);
+
+final bearingCalculatorProvider = Provider<BearingCalculator>(
+  (ref) => const GeolocatorBearingCalculator(),
+);
+
+final headingProviderProvider = Provider<HeadingProvider>(
+  (ref) => const FlutterCompassHeadingProvider(),
+);
+
+// StreamProvider so the magnetometer subscription is shared/cached
+// app-lifetime like everything else here, rather than every guide sheet
+// opening its own.
+final watchDeviceHeadingProvider = StreamProvider<double>(
+  (ref) => ref.watch(headingProviderProvider).watchHeading(),
+);
+
+final calculateGuidanceBearingProvider = Provider(
+  (ref) => CalculateGuidanceBearing(ref.watch(bearingCalculatorProvider)),
 );

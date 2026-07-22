@@ -238,6 +238,7 @@ class _LabelAndPlant extends StatefulWidget {
 
 class _LabelAndPlantState extends State<_LabelAndPlant> {
   final _controller = TextEditingController();
+  bool _isGuided = true;
 
   @override
   void dispose() {
@@ -263,8 +264,24 @@ class _LabelAndPlantState extends State<_LabelAndPlant> {
           ),
         ),
         const SizedBox(height: 16),
+        _GuidedToggle(
+          isGuided: _isGuided,
+          onChanged: (value) => setState(() => _isGuided = value),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _isGuided
+              ? 'Finder gets a live compass arrow to walk toward.'
+              : 'Finder gets no directional help — pure exploration.',
+          style: AppTextTheme.caption.copyWith(fontSize: 11),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
         GestureDetector(
-          onTap: () => widget.viewModel.plant(label: _controller.text),
+          onTap: () => widget.viewModel.plant(
+            label: _controller.text,
+            isGuided: _isGuided,
+          ),
           child: GlassSurface(
             borderRadius: 14,
             tint: AppColors.violetGlow.withValues(alpha: 0.14),
@@ -278,6 +295,91 @@ class _LabelAndPlantState extends State<_LabelAndPlant> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Segmented Guided/Trackless picker for the planting flow — matches the
+/// app's glass/segment visual language rather than a stock [Switch], which
+/// would clash with the rest of this screen.
+class _GuidedToggle extends StatelessWidget {
+  const _GuidedToggle({required this.isGuided, required this.onChanged});
+
+  final bool isGuided;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassSurface(
+      borderRadius: 14,
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _SegmentButton(
+              label: 'Guided',
+              icon: Icons.explore_rounded,
+              selected: isGuided,
+              color: AppColors.cyanPulse,
+              onTap: () => onChanged(true),
+            ),
+          ),
+          Expanded(
+            child: _SegmentButton(
+              label: 'Trackless',
+              icon: Icons.visibility_off_rounded,
+              selected: !isGuided,
+              color: AppColors.violetGlow,
+              onTap: () => onChanged(false),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentButton extends StatelessWidget {
+  const _SegmentButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: 200.ms,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: selected ? color : AppColors.textMuted),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: AppTextTheme.caption.copyWith(
+                color: selected ? color : AppColors.textMuted,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

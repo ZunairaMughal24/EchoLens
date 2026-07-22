@@ -32,6 +32,7 @@ class EchoNodeCard extends StatefulWidget {
     this.isPlaying = false,
     this.hasBeenPlayed = false,
     this.onPlayTap,
+    this.onCardTap,
   });
 
   final EchoNode node;
@@ -47,6 +48,13 @@ class EchoNodeCard extends StatefulWidget {
   /// Called when the play/stop affordance is tapped. Only shown for
   /// unlocked nodes with a voice note attached.
   final VoidCallback? onPlayTap;
+
+  /// Called when the card itself is tapped anywhere outside the play
+  /// button — the parent decides what this means (opens the compass guide
+  /// for a locked, guided node; shows a "no guidance" hint for a locked,
+  /// trackless one). Null for unlocked/ambient nodes, which have nothing to
+  /// guide toward.
+  final VoidCallback? onCardTap;
 
   @override
   State<EchoNodeCard> createState() => _EchoNodeCardState();
@@ -164,12 +172,21 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isPendingUnlock)
+                  if (isPendingUnlock) ...[
                     const Padding(
                       padding: EdgeInsets.only(right: 4),
                       child: Icon(Icons.lock_outline, size: 11, color: AppColors.amberWarn),
-                    )
-                  else if (isUnlocked)
+                    ),
+                    // Tells the user this card is tappable for a compass
+                    // guide — without it, "locked and guided" looks
+                    // identical to "locked and trackless" and tapping reads
+                    // as a shot in the dark.
+                    if (node.isGuided)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 4),
+                        child: Icon(Icons.explore_rounded, size: 11, color: AppColors.cyanPulse),
+                      ),
+                  ] else if (isUnlocked)
                     const Padding(
                       padding: EdgeInsets.only(right: 4),
                       child: Icon(Icons.lock_open_rounded, size: 11, color: AppColors.signalGreen),
@@ -223,31 +240,34 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
       ],
     );
 
-    return Opacity(
-      opacity: depthOpacity,
-      // Both controllers drive the same two visual properties (scale,
-      // glow), so one AnimatedBuilder listening to both recomputes them
-      // together each frame. GlassSurface has to rebuild every frame (its
-      // tint is changing), but `content` doesn't — passed as `child` so
-      // it's built once and reused across every animation frame from
-      // either controller.
-      child: AnimatedBuilder(
-        animation: Listenable.merge([_unlockPulseController, _breathingController]),
-        builder: (context, child) {
-          final scale = depthScale * _pulseScale.value * _breathingScale.value;
-          final glowAlpha = (_glowAlpha.value + _breathingGlowDelta.value).clamp(0.0, 0.7);
-          return Transform.scale(
-            scale: scale,
-            child: GlassSurface(
-              borderRadius: 14,
-              blurSigma: 18,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              tint: isUnlocked ? AppColors.signalGreen.withValues(alpha: glowAlpha) : null,
-              child: child!,
-            ),
-          );
-        },
-        child: content,
+    return GestureDetector(
+      onTap: widget.onCardTap,
+      child: Opacity(
+        opacity: depthOpacity,
+        // Both controllers drive the same two visual properties (scale,
+        // glow), so one AnimatedBuilder listening to both recomputes them
+        // together each frame. GlassSurface has to rebuild every frame (its
+        // tint is changing), but `content` doesn't — passed as `child` so
+        // it's built once and reused across every animation frame from
+        // either controller.
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_unlockPulseController, _breathingController]),
+          builder: (context, child) {
+            final scale = depthScale * _pulseScale.value * _breathingScale.value;
+            final glowAlpha = (_glowAlpha.value + _breathingGlowDelta.value).clamp(0.0, 0.7);
+            return Transform.scale(
+              scale: scale,
+              child: GlassSurface(
+                borderRadius: 14,
+                blurSigma: 18,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                tint: isUnlocked ? AppColors.signalGreen.withValues(alpha: glowAlpha) : null,
+                child: child!,
+              ),
+            );
+          },
+          child: content,
+        ),
       ),
     )
         .animate(delay: Duration(milliseconds: 120 * widget.index))

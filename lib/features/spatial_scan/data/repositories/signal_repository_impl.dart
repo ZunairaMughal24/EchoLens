@@ -38,6 +38,7 @@ class SignalRepositoryImpl implements SignalRepository {
       isLocked: true,
       lockedLabel: _generateLockedLabel(),
       audioFilePath: signal.audioFilePath,
+      isGuided: signal.isGuided,
     );
     _echoScanDataSource.plantNode(node);
   }

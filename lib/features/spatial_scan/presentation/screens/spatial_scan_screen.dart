@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +11,7 @@ import '../../../../core/widgets/glass_surface.dart';
 import '../../../../core/widgets/nebula_background.dart';
 import '../../domain/entities/echo_node.dart';
 import '../viewmodels/spatial_scan_viewmodel.dart';
+import '../widgets/echo_guide_sheet.dart';
 import '../widgets/echo_node_card.dart';
 import '../widgets/pulse_core_radar.dart';
 import 'plant_signal_screen.dart';
@@ -320,7 +322,7 @@ class _PulseField extends StatelessWidget {
           for (final node in declutteredNodes)
             if (_shouldBloom(node)) _positionedBloom(node, fieldSize, radarSize),
           for (var i = 0; i < declutteredNodes.length; i++)
-            _positionedNode(declutteredNodes[i], i, fieldSize, radarSize),
+            _positionedNode(context, declutteredNodes[i], i, fieldSize, radarSize),
         ],
       ),
     );
@@ -347,6 +349,7 @@ class _PulseField extends StatelessWidget {
   }
 
   Widget _positionedNode(
+    BuildContext context,
     EchoNode node,
     int index,
     double fieldSize,
@@ -380,7 +383,36 @@ class _PulseField extends StatelessWidget {
           isPlaying: node.id == playingNodeId,
           hasBeenPlayed: playedNodeIds.contains(node.id),
           onPlayTap: () => onPlayTap(node),
+          // Only locked geo-anchored nodes have anything to guide toward —
+          // unlocked/ambient cards get no tap handler at all rather than a
+          // no-op one, so they don't show a false affordance.
+          onCardTap: node.isGeoAnchored && node.isLocked
+              ? () => _handleCardTap(context, node)
+              : null,
         ),
+      ),
+    );
+  }
+
+  void _handleCardTap(BuildContext context, EchoNode node) {
+    if (node.isGuided) {
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (_) => EchoGuideSheet(node: node),
+      );
+      return;
+    }
+    HapticFeedback.selectionClick();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'This echo is trackless — no guidance. Keep scanning to find it.',
+          style: AppTextTheme.body.copyWith(color: AppColors.textPrimary),
+        ),
+        backgroundColor: AppColors.nebulaSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }

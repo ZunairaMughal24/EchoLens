@@ -18,6 +18,7 @@ class EchoNodeModel extends EchoNode {
     super.lockedLabel,
     super.distanceMeters,
     super.audioFilePath,
+    super.isGuided,
   });
 
   factory EchoNodeModel.fromJson(Map<String, dynamic> json) {
@@ -34,6 +35,10 @@ class EchoNodeModel extends EchoNode {
       isLocked: json['isLocked'] as bool? ?? false,
       lockedLabel: json['lockedLabel'] as String?,
       audioFilePath: json['audioFilePath'] as String?,
+      // Defaults true for records persisted before this field existed, so
+      // echoes planted pre-feature still get guidance rather than silently
+      // becoming trackless.
+      isGuided: json['isGuided'] as bool? ?? true,
     );
   }
 
@@ -50,5 +55,6 @@ class EchoNodeModel extends EchoNode {
         'isLocked': isLocked,
         if (lockedLabel != null) 'lockedLabel': lockedLabel,
         if (audioFilePath != null) 'audioFilePath': audioFilePath,
+        'isGuided': isGuided,
       };
 }

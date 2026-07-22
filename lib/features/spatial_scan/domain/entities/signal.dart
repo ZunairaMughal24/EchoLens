@@ -11,6 +11,7 @@ class Signal {
     required this.longitude,
     required this.audioFilePath,
     required this.recordedAt,
+    this.isGuided = true,
   });
 
   final String id;
@@ -19,4 +20,8 @@ class Signal {
   final double longitude;
   final String audioFilePath;
   final DateTime recordedAt;
+
+  /// The planter's choice of whether finders get a live compass guide
+  /// toward this echo, or have to find it by scanning alone.
+  final bool isGuided;
 }

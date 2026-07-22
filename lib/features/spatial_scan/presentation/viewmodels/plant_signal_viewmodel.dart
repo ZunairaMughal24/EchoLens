@@ -88,7 +88,7 @@ class PlantSignalViewModel extends AutoDisposeNotifier<PlantSignalUiState> {
     }
   }
 
-  Future<void> plant({required String label}) async {
+  Future<void> plant({required String label, required bool isGuided}) async {
     // Guards against a fast double-tap on "Plant Echo" firing this twice —
     // the second call sees planting already in flight and bails out,
     // regardless of whether the UI has rebuilt to hide the button yet.
@@ -101,7 +101,7 @@ class PlantSignalViewModel extends AutoDisposeNotifier<PlantSignalUiState> {
     try {
       final plantSignal = ref.read(plantSignalProvider);
       final resolvedLabel = label.trim().isEmpty ? 'Untitled Echo' : label.trim();
-      await plantSignal(label: resolvedLabel, audioFilePath: path);
+      await plantSignal(label: resolvedLabel, audioFilePath: path, isGuided: isGuided);
       state = state.copyWith(status: RecordingStatus.planted);
     } catch (_) {
       state = state.copyWith(

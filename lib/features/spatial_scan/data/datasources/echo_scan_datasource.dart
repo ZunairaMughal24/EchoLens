@@ -114,6 +114,9 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       longitude: isSignalTarget ? _signalTargetLongitude : null,
       isLocked: isSignalTarget,
       lockedLabel: isSignalTarget ? _signalLockedLabel : null,
+      // Guided so the built-in demo target works with the compass-guide
+      // feature out of the box, without needing to plant a fresh echo first.
+      isGuided: true,
     );
   }
 
@@ -137,6 +140,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       lockedLabel: node.lockedLabel,
       distanceMeters: node.distanceMeters,
       audioFilePath: node.audioFilePath,
+      isGuided: node.isGuided,
     );
   }
 }

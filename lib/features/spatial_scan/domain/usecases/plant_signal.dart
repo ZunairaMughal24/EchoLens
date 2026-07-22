@@ -16,6 +16,7 @@ class PlantSignal {
   Future<Signal> call({
     required String label,
     required String audioFilePath,
+    bool isGuided = true,
   }) async {
     final location = await _getCurrentUserLocation();
     final signal = Signal(
@@ -25,6 +26,7 @@ class PlantSignal {
       longitude: location.longitude,
       audioFilePath: audioFilePath,
       recordedAt: DateTime.now(),
+      isGuided: isGuided,
     );
     await _signalRepository.plant(signal);
     return signal;
