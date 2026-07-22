@@ -74,14 +74,16 @@ class EchoNode {
   EchoNode copyWith({
     bool? isLocked,
     double? distanceMeters,
+    double? distance,
+    double? depth,
   }) {
     return EchoNode(
       id: id,
       label: label,
       category: category,
       angleRadians: angleRadians,
-      distance: distance,
-      depth: depth,
+      distance: distance ?? this.distance,
+      depth: depth ?? this.depth,
       intensity: intensity,
       latitude: latitude,
       longitude: longitude,
