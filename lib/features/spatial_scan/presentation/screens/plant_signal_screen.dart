@@ -26,10 +26,24 @@ class PlantSignalScreen extends ConsumerWidget {
             children: [
               _Header(onClose: () => Navigator.of(context).maybePop()),
               Expanded(
-                child: Center(
-                  child: switch (state.status) {
-                    RecordingStatus.planted => const _PlantedConfirmation(),
-                    _ => _RecordingPanel(state: state, viewModel: viewModel),
+                // ConstrainedBox + SingleChildScrollView (rather than a bare
+                // Center) so the recording panel stays centered when it
+                // fits, but scrolls instead of overflowing when the
+                // on-screen keyboard shrinks available height while the
+                // label TextField is focused.
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        child: Center(
+                          child: switch (state.status) {
+                            RecordingStatus.planted => const _PlantedConfirmation(),
+                            _ => _RecordingPanel(state: state, viewModel: viewModel),
+                          },
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -53,13 +67,20 @@ class _Header extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Plant an Echo', style: AppTextTheme.headline),
-              Text('LEAVE A VOICE NOTE HERE', style: AppTextTheme.hudLabel),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Plant an Echo', style: AppTextTheme.headline, overflow: TextOverflow.ellipsis),
+                Text(
+                  'LEAVE A VOICE NOTE HERE',
+                  style: AppTextTheme.hudLabel,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 12),
           GestureDetector(
             onTap: onClose,
             child: GlassSurface(

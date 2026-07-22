@@ -78,13 +78,24 @@ class _Header extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('EchoLens', style: AppTextTheme.display),
-              Text('SCANNING PHYSICAL SPACE', style: AppTextTheme.hudLabel),
-            ],
+          // Expanded + ellipsis rather than a bare Column: on narrow
+          // devices "EchoLens" + the two header buttons can outgrow the
+          // available width — this guarantees the title truncates instead
+          // of throwing a RenderFlex overflow.
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('EchoLens', style: AppTextTheme.display, overflow: TextOverflow.ellipsis),
+                Text(
+                  'SCANNING PHYSICAL SPACE',
+                  style: AppTextTheme.hudLabel,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 12),
           Row(
             children: [
               GestureDetector(
@@ -180,7 +191,14 @@ class _PulseField extends StatelessWidget {
     final maxRadius = fieldSize / 2;
     // Nodes read past the radar's own drawn radius so the glass cards feel
     // like they float in a layer above the raw scan, not glued to the rings.
-    final placementRadius = node.distance * maxRadius * 1.05;
+    //
+    // Clamped so the card's bounding box (140 wide, can scale up to ~1.1x by
+    // depth) never crosses the Stack's edge — Stack clips by default, and at
+    // distance ~0.95 (common with the mock data) an unclamped radius pushes
+    // a card's edge past the field boundary, visibly cutting it off.
+    const cardHalfWidthAtMaxScale = 140 / 2 * 1.1;
+    final maxPlacementRadius = (maxRadius - cardHalfWidthAtMaxScale).clamp(0.0, maxRadius);
+    final placementRadius = (node.distance * maxRadius * 1.05).clamp(0.0, maxPlacementRadius);
     final center = fieldSize / 2;
     final dx = center + cos(node.angleRadians) * placementRadius;
     final dy = center + sin(node.angleRadians) * placementRadius;

@@ -23,7 +23,11 @@ abstract final class AppColors {
   // Text
   static const textPrimary = Color(0xFFF4F6FF);
   static const textSecondary = Color(0xFFA6ADC8);
-  static const textMuted = Color(0xFF6B7290);
+  // Was 0xFF6B7290 — measured ~4.4:1 against voidBlack, just under the
+  // 4.5:1 WCAG AA floor for small text (this is used at 9-12px throughout
+  // the HUD). Brightened to a comfortable ~6.6:1 while keeping it visibly
+  // dimmer than textSecondary for hierarchy.
+  static const textMuted = Color(0xFF8791AD);
 
   static const backgroundGradient = LinearGradient(
     begin: Alignment.topCenter,

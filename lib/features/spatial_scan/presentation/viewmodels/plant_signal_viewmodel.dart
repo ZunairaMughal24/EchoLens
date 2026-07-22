@@ -33,9 +33,19 @@ class PlantSignalUiState {
 /// button taps), so it's orchestrated here rather than folded into a single
 /// use case; [PlantSignal] itself only owns the business rule of anchoring
 /// the result to the user's current GPS fix.
-class PlantSignalViewModel extends Notifier<PlantSignalUiState> {
+class PlantSignalViewModel extends AutoDisposeNotifier<PlantSignalUiState> {
   @override
-  PlantSignalUiState build() => const PlantSignalUiState();
+  PlantSignalUiState build() {
+    // Covers the back-button/swipe-away case, not just the explicit close
+    // button: if the screen is torn down mid-recording, stop the recorder
+    // rather than leaving the mic hot in the background.
+    ref.onDispose(() {
+      if (state.status == RecordingStatus.recording) {
+        ref.read(audioRecorderProvider).stop();
+      }
+    });
+    return const PlantSignalUiState();
+  }
 
   Future<void> startRecording() async {
     final recorder = ref.read(audioRecorderProvider);
@@ -85,7 +95,11 @@ class PlantSignalViewModel extends Notifier<PlantSignalUiState> {
   void reset() => state = const PlantSignalUiState();
 }
 
-final plantSignalViewModelProvider =
-    NotifierProvider<PlantSignalViewModel, PlantSignalUiState>(
+// autoDispose (unlike the app-lifetime spatial_scan_providers): this
+// ViewModel's job is entirely scoped to one visit to PlantSignalScreen.
+// Without it, planting an echo then reopening the screen later would show
+// the stale "planted!" confirmation instead of a fresh recording UI.
+final plantSignalViewModelProvider = NotifierProvider.autoDispose<
+    PlantSignalViewModel, PlantSignalUiState>(
   PlantSignalViewModel.new,
 );

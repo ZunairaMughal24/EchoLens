@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/spatial_scan_providers.dart';
@@ -74,10 +75,9 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
     final audioPlayer = ref.watch(audioPlayerProvider);
 
     void recompute() {
-      state = state.copyWith(
-        nodes: evaluateSignalProximity(_latestRawNodes, _latestUserLocation),
-        userLocation: _latestUserLocation,
-      );
+      final updatedNodes = evaluateSignalProximity(_latestRawNodes, _latestUserLocation);
+      _firePulseForNewlyUnlocked(previous: state.nodes, updated: updatedNodes);
+      state = state.copyWith(nodes: updatedNodes, userLocation: _latestUserLocation);
     }
 
     _echoSubscription = watchNearbyEchoes().listen((nodes) {
@@ -111,6 +111,25 @@ class SpatialScanViewModel extends Notifier<SpatialScanUiState> {
       _playbackSubscription?.cancel();
     });
     return const SpatialScanUiState();
+  }
+
+  /// Fires a heavy haptic pulse for every geo-anchored node that just
+  /// flipped from locked to unlocked — a node not present in [previous] is
+  /// treated as "was locked" so a signal that unlocks on the very first
+  /// evaluation (e.g. planting one while already standing on it) still
+  /// buzzes, not just ones discovered while already-known-locked.
+  void _firePulseForNewlyUnlocked({
+    required List<EchoNode> previous,
+    required List<EchoNode> updated,
+  }) {
+    final previousLockById = {for (final node in previous) node.id: node.isLocked};
+    final justUnlocked = updated.any((node) {
+      if (!node.isGeoAnchored || node.isLocked) return false;
+      return previousLockById[node.id] ?? true;
+    });
+    if (justUnlocked) {
+      HapticFeedback.heavyImpact();
+    }
   }
 
   void toggleScanning() {
