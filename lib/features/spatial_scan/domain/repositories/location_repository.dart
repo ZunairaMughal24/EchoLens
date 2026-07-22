@@ -6,4 +6,8 @@ import '../entities/user_location.dart';
 /// ViewModel can react the same way it reacts to any other stream error.
 abstract interface class LocationRepository {
   Stream<UserLocation> watchPosition();
+
+  /// A single current fix — used by the planting flow, which needs "where
+  /// am I right now" rather than a continuous stream.
+  Future<UserLocation> getCurrentPosition();
 }

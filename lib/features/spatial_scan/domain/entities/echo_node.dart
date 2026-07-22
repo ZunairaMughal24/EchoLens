@@ -25,6 +25,7 @@ class EchoNode {
     this.isLocked = false,
     this.lockedLabel,
     this.distanceMeters,
+    this.audioFilePath,
   });
 
   final String id;
@@ -58,7 +59,13 @@ class EchoNode {
   /// meters. Null until a location fix and this node have both been seen.
   final double? distanceMeters;
 
+  /// Local path to a recorded voice note attached to this node, if any
+  /// (see `PlantSignal`). Only meaningful once unlocked.
+  final String? audioFilePath;
+
   bool get isGeoAnchored => latitude != null && longitude != null;
+
+  bool get hasVoiceNote => audioFilePath != null;
 
   /// The label to actually render: the encrypted placeholder while locked,
   /// otherwise the real [label].
@@ -81,6 +88,7 @@ class EchoNode {
       isLocked: isLocked ?? this.isLocked,
       lockedLabel: lockedLabel,
       distanceMeters: distanceMeters ?? this.distanceMeters,
+      audioFilePath: audioFilePath,
     );
   }
 }

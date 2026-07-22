@@ -6,15 +6,41 @@ import '../../domain/entities/echo_node.dart';
 
 abstract interface class EchoScanDataSource {
   Stream<List<EchoNodeModel>> watch();
+
+  /// Injects a newly-planted node into the live scan pool immediately —
+  /// used by [SignalRepositoryImpl] so a freshly planted echo shows up on
+  /// the radar without waiting for the next drift tick.
+  void plantNode(EchoNodeModel node);
 }
 
 /// Demo data source that simulates a live ambient scan with gently drifting
 /// readings. Swap this for a BLE/Wi-Fi/GPS-backed implementation behind the
 /// same [EchoScanDataSource] contract — nothing above the data layer changes.
+///
+/// Holds its node list and stream as instance state (rather than rebuilding
+/// them per [watch] call) so [plantNode] can push updates to whichever
+/// listener is already attached — this datasource is registered as a single
+/// app-lifetime provider, so the scan screen and the planting flow always
+/// share the same instance.
 class MockEchoScanDataSource implements EchoScanDataSource {
-  MockEchoScanDataSource({Random? random}) : _random = random ?? Random();
+  MockEchoScanDataSource({Random? random}) : _random = random ?? Random() {
+    _nodes = List.generate(6, (i) => _seedNode(i));
+    _controller = StreamController<List<EchoNodeModel>>.broadcast(
+      onListen: () {
+        _ticker = Timer.periodic(const Duration(milliseconds: 900), (_) {
+          _nodes = [for (final node in _nodes) _drift(node)];
+          _controller.add(_nodes);
+        });
+      },
+      onCancel: () => _ticker?.cancel(),
+    );
+  }
 
   final Random _random;
+  late List<EchoNodeModel> _nodes;
+  late final StreamController<List<EchoNodeModel>> _controller;
+  Timer? _ticker;
+
   static const _labels = [
     'Signal Cluster',
     'Ambient Presence',
@@ -38,25 +64,16 @@ class MockEchoScanDataSource implements EchoScanDataSource {
 
   @override
   Stream<List<EchoNodeModel>> watch() {
-    var nodes = List.generate(6, (i) => _seedNode(i));
-    Timer? ticker;
-    late final StreamController<List<EchoNodeModel>> controller;
+    // Broadcast streams don't replay past events to a new listener, so hand
+    // it the current snapshot right after `.listen()` attaches.
+    Future.microtask(() => _controller.add(_nodes));
+    return _controller.stream;
+  }
 
-    // Timer.periodic (vs. a recursive `Future.delayed` loop) so that
-    // cancelling the subscription actually stops the polling — a
-    // `Future.delayed` already in flight can't be cancelled once scheduled,
-    // which would leak a timer for as long as the process runs.
-    controller = StreamController<List<EchoNodeModel>>(
-      onListen: () {
-        controller.add(nodes);
-        ticker = Timer.periodic(const Duration(milliseconds: 900), (_) {
-          nodes = [for (final node in nodes) _drift(node)];
-          controller.add(nodes);
-        });
-      },
-      onCancel: () => ticker?.cancel(),
-    );
-    return controller.stream;
+  @override
+  void plantNode(EchoNodeModel node) {
+    _nodes = [..._nodes, node];
+    _controller.add(_nodes);
   }
 
   EchoNodeModel _seedNode(int index) {
@@ -100,6 +117,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       isLocked: node.isLocked,
       lockedLabel: node.lockedLabel,
       distanceMeters: node.distanceMeters,
+      audioFilePath: node.audioFilePath,
     );
   }
 }

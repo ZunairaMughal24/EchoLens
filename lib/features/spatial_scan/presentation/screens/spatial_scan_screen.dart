@@ -11,6 +11,7 @@ import '../../domain/entities/echo_node.dart';
 import '../viewmodels/spatial_scan_viewmodel.dart';
 import '../widgets/echo_node_card.dart';
 import '../widgets/pulse_core_radar.dart';
+import 'plant_signal_screen.dart';
 
 /// Main EchoLens screen — the Pulse Field. Pure presentation: all state
 /// comes from [spatialScanViewModelProvider]; this widget only lays things
@@ -32,12 +33,24 @@ class SpatialScanScreen extends ConsumerWidget {
               final fieldSize = min(constraints.maxWidth, constraints.maxHeight * 0.62);
               return Column(
                 children: [
-                  _Header(isScanning: state.isScanning, onToggle: viewModel.toggleScanning),
+                  _Header(
+                    isScanning: state.isScanning,
+                    onToggle: viewModel.toggleScanning,
+                    onPlant: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PlantSignalScreen()),
+                    ),
+                  ),
                   if (state.locationErrorMessage != null)
                     _LocationErrorBanner(message: state.locationErrorMessage!),
                   Expanded(
                     child: Center(
-                      child: _PulseField(nodes: state.nodes, isScanning: state.isScanning, fieldSize: fieldSize),
+                      child: _PulseField(
+                        nodes: state.nodes,
+                        isScanning: state.isScanning,
+                        fieldSize: fieldSize,
+                        playingNodeId: state.playingNodeId,
+                        onPlayTap: viewModel.playSignal,
+                      ),
                     ),
                   ),
                   _StatusPanel(nodeCount: state.nodes.length, isScanning: state.isScanning),
@@ -52,10 +65,11 @@ class SpatialScanScreen extends ConsumerWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.isScanning, required this.onToggle});
+  const _Header({required this.isScanning, required this.onToggle, required this.onPlant});
 
   final bool isScanning;
   final VoidCallback onToggle;
+  final VoidCallback onPlant;
 
   @override
   Widget build(BuildContext context) {
@@ -71,16 +85,29 @@ class _Header extends StatelessWidget {
               Text('SCANNING PHYSICAL SPACE', style: AppTextTheme.hudLabel),
             ],
           ),
-          GestureDetector(
-            onTap: onToggle,
-            child: GlassSurface(
-              borderRadius: 30,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Icon(
-                isScanning ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                color: AppColors.cyanPulse,
+          Row(
+            children: [
+              GestureDetector(
+                onTap: onPlant,
+                child: GlassSurface(
+                  borderRadius: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: const Icon(Icons.add_rounded, color: AppColors.cyanPulse),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: onToggle,
+                child: GlassSurface(
+                  borderRadius: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Icon(
+                    isScanning ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: AppColors.cyanPulse,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -119,11 +146,19 @@ class _LocationErrorBanner extends StatelessWidget {
 }
 
 class _PulseField extends StatelessWidget {
-  const _PulseField({required this.nodes, required this.isScanning, required this.fieldSize});
+  const _PulseField({
+    required this.nodes,
+    required this.isScanning,
+    required this.fieldSize,
+    required this.playingNodeId,
+    required this.onPlayTap,
+  });
 
   final List<EchoNode> nodes;
   final bool isScanning;
   final double fieldSize;
+  final String? playingNodeId;
+  final ValueChanged<EchoNode> onPlayTap;
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +190,12 @@ class _PulseField extends StatelessWidget {
       top: dy - 16,
       child: SizedBox(
         width: 140,
-        child: EchoNodeCard(node: node, index: index),
+        child: EchoNodeCard(
+          node: node,
+          index: index,
+          isPlaying: node.id == playingNodeId,
+          onPlayTap: () => onPlayTap(node),
+        ),
       ),
     );
   }

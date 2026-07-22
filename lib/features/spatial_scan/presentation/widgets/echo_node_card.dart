@@ -15,10 +15,23 @@ import '../../domain/entities/echo_node.dart';
 /// GPS proximity (see EvaluateSignalProximity): the label crossfades from
 /// its encrypted placeholder to the real name the moment the node unlocks.
 class EchoNodeCard extends StatelessWidget {
-  const EchoNodeCard({super.key, required this.node, required this.index});
+  const EchoNodeCard({
+    super.key,
+    required this.node,
+    required this.index,
+    this.isPlaying = false,
+    this.onPlayTap,
+  });
 
   final EchoNode node;
   final int index;
+
+  /// Whether this node's voice note is the one currently playing.
+  final bool isPlaying;
+
+  /// Called when the play/stop affordance is tapped. Only shown for
+  /// unlocked nodes with a voice note attached.
+  final VoidCallback? onPlayTap;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +39,7 @@ class EchoNodeCard extends StatelessWidget {
     final depthOpacity = (0.55 + node.depth * 0.45).clamp(0.0, 1.0);
     final isPendingUnlock = node.isGeoAnchored && node.isLocked;
     final isUnlocked = node.isGeoAnchored && !node.isLocked;
+    final showPlayButton = isUnlocked && node.hasVoiceNote;
 
     return Opacity(
       opacity: depthOpacity,
@@ -92,6 +106,17 @@ class EchoNodeCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (showPlayButton) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: onPlayTap,
+                  child: Icon(
+                    isPlaying ? Icons.stop_circle_rounded : Icons.play_circle_fill_rounded,
+                    size: 20,
+                    color: AppColors.signalGreen,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

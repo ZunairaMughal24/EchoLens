@@ -17,6 +17,7 @@ class EchoNodeModel extends EchoNode {
     super.isLocked,
     super.lockedLabel,
     super.distanceMeters,
+    super.audioFilePath,
   });
 
   factory EchoNodeModel.fromJson(Map<String, dynamic> json) {
@@ -32,6 +33,7 @@ class EchoNodeModel extends EchoNode {
       longitude: (json['longitude'] as num?)?.toDouble(),
       isLocked: json['isLocked'] as bool? ?? false,
       lockedLabel: json['lockedLabel'] as String?,
+      audioFilePath: json['audioFilePath'] as String?,
     );
   }
 
@@ -47,5 +49,6 @@ class EchoNodeModel extends EchoNode {
         if (longitude != null) 'longitude': longitude,
         'isLocked': isLocked,
         if (lockedLabel != null) 'lockedLabel': lockedLabel,
+        if (audioFilePath != null) 'audioFilePath': audioFilePath,
       };
 }
