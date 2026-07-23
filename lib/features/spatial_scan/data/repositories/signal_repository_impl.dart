@@ -39,6 +39,7 @@ class SignalRepositoryImpl implements SignalRepository {
       lockedLabel: _generateLockedLabel(),
       audioFilePath: signal.audioFilePath,
       isGuided: signal.isGuided,
+      plantedAt: signal.recordedAt,
     );
     _echoScanDataSource.plantNode(node);
   }

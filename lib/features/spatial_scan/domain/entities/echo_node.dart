@@ -27,6 +27,7 @@ class EchoNode {
     this.distanceMeters,
     this.audioFilePath,
     this.isGuided = true,
+    this.plantedAt,
   });
 
   final String id;
@@ -70,6 +71,11 @@ class EchoNode {
   /// scanning alone. Meaningless for ambient (non-geo-anchored) nodes.
   final bool isGuided;
 
+  /// When this was planted, if it was (null for the ambient demo seeds).
+  /// Static per-node, like [isGuided] — used to sort/display the "My
+  /// Echoes" list by recency, not recomputed after plant time.
+  final DateTime? plantedAt;
+
   bool get isGeoAnchored => latitude != null && longitude != null;
 
   bool get hasVoiceNote => audioFilePath != null;
@@ -100,6 +106,7 @@ class EchoNode {
       distanceMeters: distanceMeters ?? this.distanceMeters,
       audioFilePath: audioFilePath,
       isGuided: isGuided,
+      plantedAt: plantedAt,
     );
   }
 }

@@ -9,10 +9,12 @@ import '../domain/services/bearing_calculator.dart';
 import '../domain/services/distance_calculator.dart';
 import '../domain/services/heading_provider.dart';
 import '../domain/usecases/decompose_cardinal_offset.dart';
+import '../domain/usecases/delete_echo.dart';
 import '../domain/usecases/evaluate_signal_proximity.dart';
 import '../domain/usecases/get_current_user_location.dart';
 import '../domain/usecases/plant_signal.dart';
 import '../domain/usecases/watch_nearby_echoes.dart';
+import '../domain/usecases/watch_planted_echoes.dart';
 import '../domain/usecases/watch_user_location.dart';
 import 'datasources/echo_scan_datasource.dart';
 import 'datasources/location_datasource.dart';
@@ -103,4 +105,12 @@ final watchDeviceHeadingProvider = StreamProvider<double>(
 
 final decomposeCardinalOffsetProvider = Provider(
   (ref) => const DecomposeCardinalOffset(),
+);
+
+final watchPlantedEchoesProvider = Provider(
+  (ref) => WatchPlantedEchoes(ref.watch(echoScanRepositoryProvider)),
+);
+
+final deleteEchoProvider = Provider(
+  (ref) => DeleteEcho(ref.watch(echoScanRepositoryProvider)),
 );

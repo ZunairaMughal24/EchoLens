@@ -9,4 +9,10 @@ class EchoScanRepositoryImpl implements EchoScanRepository {
 
   @override
   Stream<List<EchoNode>> watchNearbyEchoes() => _dataSource.watch();
+
+  @override
+  Stream<List<EchoNode>> watchPlantedEchoes() => _dataSource.watchPlanted();
+
+  @override
+  Future<void> deleteEcho(String id) => _dataSource.deleteNode(id);
 }

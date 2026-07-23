@@ -15,6 +15,7 @@ import '../viewmodels/spatial_scan_viewmodel.dart';
 import '../widgets/echo_guide_sheet.dart';
 import '../widgets/echo_node_card.dart';
 import '../widgets/pulse_core_radar.dart';
+import 'my_echoes_screen.dart';
 import 'plant_signal_screen.dart';
 
 /// Main EchoLens screen — the Pulse Field. Pure presentation: all state
@@ -89,6 +90,11 @@ class SpatialScanScreen extends ConsumerWidget {
                         builder: (_) => const PlantSignalScreen(),
                       ),
                     ),
+                    onMyEchoes: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const MyEchoesScreen(),
+                      ),
+                    ),
                   ),
                   Expanded(
                     child: Center(
@@ -122,11 +128,13 @@ class _Header extends StatelessWidget {
     required this.isScanning,
     required this.onToggle,
     required this.onPlant,
+    required this.onMyEchoes,
   });
 
   final bool isScanning;
   final VoidCallback onToggle;
   final VoidCallback onPlant;
+  final VoidCallback onMyEchoes;
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +171,21 @@ class _Header extends StatelessWidget {
               const SizedBox(width: 12),
               Row(
                 children: [
+                  GestureDetector(
+                    onTap: onMyEchoes,
+                    // Green — distinct from violet (create) and cyan
+                    // (scan): this is "your own content," closer in spirit
+                    // to the unlocked/success accent than either of those.
+                    child: GlassSurface(
+                      borderRadius: 12,
+                      padding: const EdgeInsets.all(10),
+                      child: const Icon(
+                        Icons.library_music_rounded,
+                        color: AppColors.signalGreen,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   GestureDetector(
                     onTap: onPlant,
                     // Violet, not cyan — plant/create reads as its own action

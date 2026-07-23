@@ -19,6 +19,7 @@ class EchoNodeModel extends EchoNode {
     super.distanceMeters,
     super.audioFilePath,
     super.isGuided,
+    super.plantedAt,
   });
 
   factory EchoNodeModel.fromJson(Map<String, dynamic> json) {
@@ -39,6 +40,9 @@ class EchoNodeModel extends EchoNode {
       // echoes planted pre-feature still get guidance rather than silently
       // becoming trackless.
       isGuided: json['isGuided'] as bool? ?? true,
+      plantedAt: json['plantedAt'] == null
+          ? null
+          : DateTime.parse(json['plantedAt'] as String),
     );
   }
 
@@ -56,5 +60,6 @@ class EchoNodeModel extends EchoNode {
         if (lockedLabel != null) 'lockedLabel': lockedLabel,
         if (audioFilePath != null) 'audioFilePath': audioFilePath,
         'isGuided': isGuided,
+        if (plantedAt != null) 'plantedAt': plantedAt!.toIso8601String(),
       };
 }

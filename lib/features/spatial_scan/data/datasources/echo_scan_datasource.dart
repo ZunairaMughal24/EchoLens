@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import '../models/echo_node_model.dart';
@@ -8,10 +9,18 @@ import '../../domain/entities/echo_node.dart';
 abstract interface class EchoScanDataSource {
   Stream<List<EchoNodeModel>> watch();
 
+  /// Just the nodes the user has actually planted — not the ambient demo
+  /// seeds — for the "My Echoes" management screen.
+  Stream<List<EchoNodeModel>> watchPlanted();
+
   /// Injects a newly-planted node into the live scan pool immediately —
   /// used by [SignalRepositoryImpl] so a freshly planted echo shows up on
   /// the radar without waiting for the next drift tick.
   void plantNode(EchoNodeModel node);
+
+  /// Removes a planted node from both the live scan pool and persisted
+  /// storage, and deletes its recorded audio file from disk.
+  Future<void> deleteNode(String id);
 }
 
 /// Demo data source that simulates a live ambient scan with gently drifting
@@ -37,6 +46,13 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       },
       onCancel: () => _ticker?.cancel(),
     );
+    // Separate broadcast stream, not derived by filtering `watch()` — the
+    // "My Echoes" screen needs *only* what the user planted, and filtering
+    // ambient nodes out by `isGeoAnchored` alone would wrongly include the
+    // hardcoded demo target too (it's geo-anchored but never "planted").
+    _plantedController = StreamController<List<EchoNodeModel>>.broadcast(
+      onListen: () => _plantedController.add(_plantedNodes),
+    );
     // Fire-and-forget: restoring planted echoes shouldn't block the radar
     // from showing the ambient seeds immediately. They join the pool (and
     // get broadcast to whoever's already listening) a moment later.
@@ -48,6 +64,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
   late List<EchoNodeModel> _nodes;
   final List<EchoNodeModel> _plantedNodes = [];
   late final StreamController<List<EchoNodeModel>> _controller;
+  late final StreamController<List<EchoNodeModel>> _plantedController;
   Timer? _ticker;
 
   static const _labels = [
@@ -86,11 +103,44 @@ class MockEchoScanDataSource implements EchoScanDataSource {
   }
 
   @override
+  Stream<List<EchoNodeModel>> watchPlanted() {
+    Future.microtask(() => _plantedController.add(_plantedNodes));
+    return _plantedController.stream;
+  }
+
+  @override
   void plantNode(EchoNodeModel node) {
     _nodes = [..._nodes, node];
     _plantedNodes.add(node);
     _controller.add(_nodes);
+    _plantedController.add(_plantedNodes);
     unawaited(_signalStore.savePlantedNodes(_plantedNodes));
+  }
+
+  @override
+  Future<void> deleteNode(String id) async {
+    EchoNodeModel? deleted;
+    for (final node in _plantedNodes) {
+      if (node.id == id) {
+        deleted = node;
+        break;
+      }
+    }
+
+    _nodes = [for (final node in _nodes) if (node.id != id) node];
+    _plantedNodes.removeWhere((node) => node.id == id);
+    _controller.add(_nodes);
+    _plantedController.add(_plantedNodes);
+    await _signalStore.savePlantedNodes(_plantedNodes);
+
+    // Remove the underlying recording too — without this, deleting an echo
+    // only forgets the reference to it while the actual .m4a file sits
+    // orphaned in the app's documents directory forever.
+    final path = deleted?.audioFilePath;
+    if (path != null) {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    }
   }
 
   Future<void> _restorePersistedNodes() async {
@@ -99,6 +149,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
     _plantedNodes.addAll(persisted);
     _nodes = [..._nodes, ...persisted];
     _controller.add(_nodes);
+    _plantedController.add(_plantedNodes);
   }
 
   EchoNodeModel _seedNode(int index) {
@@ -147,6 +198,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
       distanceMeters: node.distanceMeters,
       audioFilePath: node.audioFilePath,
       isGuided: node.isGuided,
+      plantedAt: node.plantedAt,
     );
   }
 }
