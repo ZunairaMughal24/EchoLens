@@ -21,11 +21,127 @@ import 'plant_signal_screen.dart';
 /// Main EchoLens screen — the Pulse Field. Pure presentation: all state
 /// comes from [spatialScanViewModelProvider]; this widget only lays things
 /// out and forwards user intents to the ViewModel.
-class SpatialScanScreen extends ConsumerWidget {
+///
+/// Stateful (not a plain ConsumerWidget) to drive the right-to-left swipe
+/// into My Echoes as a genuinely interactive, finger-following preview: an
+/// [OverlayEntry] rendered on top of this screen, reclipped on every single
+/// [onHorizontalDragUpdate] so the reveal boundary sits exactly under the
+/// finger the whole time it's dragging — not a pre-baked animation that
+/// only starts once the gesture has already ended.
+class SpatialScanScreen extends ConsumerStatefulWidget {
   const SpatialScanScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SpatialScanScreen> createState() => _SpatialScanScreenState();
+}
+
+class _SpatialScanScreenState extends ConsumerState<SpatialScanScreen>
+    with TickerProviderStateMixin {
+  // How far (in logical pixels) a drag needs to travel to fully reveal the
+  // page — a fixed budget rather than "all the way to the screen edge," so
+  // it feels the same regardless of where on the screen you start the swipe.
+  static const _revealDragDistance = 260.0;
+
+  Offset? _touchStart;
+  double _touchYFraction = 0.5;
+  final ValueNotifier<double> _edgeFraction = ValueNotifier(0);
+  OverlayEntry? _swipeOverlay;
+  AnimationController? _settleController;
+
+  // Disposing an AnimationController twice throws — and _settleController
+  // gets disposed from three different places (a new gesture starting, a
+  // gesture ending, and this widget itself being torn down), so the field
+  // must be nulled out immediately after every dispose, not just here.
+  // Route everything through this one method rather than raw `?.dispose()`
+  // calls scattered around.
+  void _disposeSettleController() {
+    _settleController?.dispose();
+    _settleController = null;
+  }
+
+  @override
+  void dispose() {
+    _disposeSettleController();
+    _swipeOverlay?.remove();
+    _edgeFraction.dispose();
+    super.dispose();
+  }
+
+  void _onSwipeStart(DragStartDetails details) {
+    // Defensive cleanup in case a previous gesture's settle animation
+    // somehow didn't finish before a new one started.
+    _disposeSettleController();
+    _swipeOverlay?.remove();
+
+    _touchStart = details.globalPosition;
+    _touchYFraction =
+        (details.globalPosition.dy / MediaQuery.sizeOf(context).height).clamp(0.0, 1.0);
+    _edgeFraction.value = 0;
+
+    _swipeOverlay = OverlayEntry(
+      builder: (context) => IgnorePointer(
+        // Just a live preview until the gesture commits — real interaction
+        // happens on the actual pushed route, a separate widget instance.
+        child: ValueListenableBuilder<double>(
+          valueListenable: _edgeFraction,
+          builder: (context, value, child) {
+            return ClipPath(
+              clipper: _LiquidWipeClipper(value, touchYFraction: _touchYFraction),
+              child: child,
+            );
+          },
+          child: const MyEchoesScreen(),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_swipeOverlay!);
+  }
+
+  void _onSwipeUpdate(DragUpdateDetails details) {
+    final start = _touchStart;
+    if (start == null) return;
+    // Directly tied to how far the finger has actually traveled from
+    // where it first touched down — this is what makes the boundary
+    // follow the finger 1:1 while dragging, rather than animating on a
+    // fixed timeline the drag itself has no influence over.
+    final dragged = (start.dx - details.globalPosition.dx).clamp(0.0, _revealDragDistance);
+    _edgeFraction.value = dragged / _revealDragDistance;
+  }
+
+  void _onSwipeEnd(DragEndDetails details) {
+    if (_touchStart == null) return;
+    _touchStart = null;
+
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldCommit = _edgeFraction.value > 0.4 || velocity < -600;
+
+    _disposeSettleController();
+    final controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: shouldCommit ? 180 : 240),
+    );
+    _settleController = controller;
+    final tween = Tween<double>(begin: _edgeFraction.value, end: shouldCommit ? 1.0 : 0.0);
+    controller.addListener(() => _edgeFraction.value = tween.evaluate(controller));
+
+    controller.forward().whenComplete(() {
+      // A newer gesture may have already disposed and replaced this
+      // controller (via _onSwipeStart's defensive cleanup) before this
+      // one's animation finished — if so, it's already gone; touching or
+      // disposing it again here is exactly what caused the crash.
+      if (_settleController != controller) return;
+      _disposeSettleController();
+      if (!mounted) return;
+      _swipeOverlay?.remove();
+      _swipeOverlay = null;
+      if (shouldCommit) {
+        Navigator.of(context).push(_liquidSwipeRoute(const MyEchoesScreen()));
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(spatialScanViewModelProvider);
     final viewModel = ref.read(spatialScanViewModelProvider.notifier);
 
@@ -57,65 +173,75 @@ class SpatialScanScreen extends ConsumerWidget {
     });
 
     return Scaffold(
-      body: NebulaBackground(
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // 0.85 (was 0.62): the field claims most of the Expanded
-              // region's height now rather than leaving a wide margin —
-              // still safely bounded, since Expanded already constrains
-              // constraints.maxHeight to whatever's left after the header
-              // and status panel.
-              //
-              // Width is capped below the full available width (not just
-              // constraints.maxWidth) so cards — clamped to stay within
-              // fieldSize's bounds in _PulseField — keep a real margin
-              // from the screen edges no matter how large radarSize gets;
-              // clamping to fieldSize alone doesn't guarantee that once
-              // fieldSize itself is allowed to equal the full screen
-              // width. 20px matches the header/status panel's own
-              // horizontal padding, so the edges all line up.
-              const horizontalMargin = 6.0;
-              final fieldSize = min(
-                constraints.maxWidth - horizontalMargin * 2,
-                constraints.maxHeight * 0.85,
-              );
-              return Column(
-                children: [
-                  _Header(
-                    isScanning: state.isScanning,
-                    onToggle: viewModel.toggleScanning,
-                    onPlant: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const PlantSignalScreen(),
+      // Whole-screen swipe zone, not just the status bar strip — swipe
+      // right-to-left starting from anywhere, including the right edge.
+      // translucent (not opaque) so this only *listens*; it doesn't
+      // change how anything paints or block taps on cards/buttons beneath
+      // it (those are a different recognizer type — tap vs. horizontal
+      // drag — competing in the same arena; a plain tap without much
+      // sideways movement still resolves as a tap).
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: _onSwipeStart,
+        onHorizontalDragUpdate: _onSwipeUpdate,
+        onHorizontalDragEnd: _onSwipeEnd,
+        child: NebulaBackground(
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // 0.85 (was 0.62): the field claims most of the Expanded
+                // region's height now rather than leaving a wide margin —
+                // still safely bounded, since Expanded already constrains
+                // constraints.maxHeight to whatever's left after the header
+                // and status panel.
+                //
+                // Width is capped below the full available width (not just
+                // constraints.maxWidth) so cards — clamped to stay within
+                // fieldSize's bounds in _PulseField — keep a real margin
+                // from the screen edges no matter how large radarSize gets;
+                // clamping to fieldSize alone doesn't guarantee that once
+                // fieldSize itself is allowed to equal the full screen
+                // width. 20px matches the header/status panel's own
+                // horizontal padding, so the edges all line up.
+                const horizontalMargin = 6.0;
+                final fieldSize = min(
+                  constraints.maxWidth - horizontalMargin * 2,
+                  constraints.maxHeight * 0.85,
+                );
+                return Column(
+                  children: [
+                    _Header(
+                      isScanning: state.isScanning,
+                      onToggle: viewModel.toggleScanning,
+                      onPlant: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const PlantSignalScreen(),
+                        ),
                       ),
                     ),
-                    onMyEchoes: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const MyEchoesScreen(),
+                    Expanded(
+                      child: Center(
+                        child: _PulseField(
+                          nodes: state.nodes,
+                          isScanning: state.isScanning,
+                          fieldSize: fieldSize,
+                          playingNodeId: state.playingNodeId,
+                          playedNodeIds: state.playedNodeIds,
+                          onPlayTap: viewModel.playSignal,
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: _PulseField(
-                        nodes: state.nodes,
-                        isScanning: state.isScanning,
-                        fieldSize: fieldSize,
-                        playingNodeId: state.playingNodeId,
-                        playedNodeIds: state.playedNodeIds,
-                        onPlayTap: viewModel.playSignal,
-                      ),
+                    const _PitchCarousel(),
+                    // No visible change here — swipe right-to-left
+                    // anywhere on screen to open My Echoes.
+                    _StatusPanel(
+                      nodeCount: state.nodes.length,
+                      isScanning: state.isScanning,
                     ),
-                  ),
-                  const _PitchCarousel(),
-                  _StatusPanel(
-                    nodeCount: state.nodes.length,
-                    isScanning: state.isScanning,
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -123,18 +249,121 @@ class SpatialScanScreen extends ConsumerWidget {
   }
 }
 
+/// A liquid, right-to-left wave wipe rather than the platform-default
+/// transition — the incoming page is revealed through a wavy (not
+/// straight) vertical boundary sweeping from the right edge to the left,
+/// matching the direction of the swipe gesture that triggered it. Runs the
+/// same way in reverse on pop, since [ClipPath] just reads off `animation`
+/// directly rather than a separately-tracked direction flag.
+Route<T> _liquidSwipeRoute<T>(Widget page) {
+  return PageRouteBuilder<T>(
+    // Zero forward duration — by the time this route actually gets pushed
+    // (from _SpatialScanScreenState._onSwipeEnd), the live drag preview has
+    // already shown the page fully revealed a frame earlier; replaying the
+    // reveal from scratch here would look like a visible double-animation.
+    // The reverse (closing) transition still gets the full liquid wave,
+    // since there's no live gesture driving that one.
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: const Duration(milliseconds: 450),
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(parent: animation, curve: Curves.easeInOutCubic);
+      return AnimatedBuilder(
+        animation: curved,
+        child: child,
+        builder: (context, child) {
+          return ClipPath(
+            clipper: _LiquidWipeClipper(curved.value),
+            child: child,
+          );
+        },
+      );
+    },
+  );
+}
+
+/// The wavy reveal boundary itself. The previous version moved 3 segments
+/// in perfect unison off a single sine wave — that reads as a mechanical
+/// "wavy line," not liquid, because every bulge breathes in lockstep. Real
+/// liquid motion is *asynchronous*: different points along the edge lag
+/// and lead each other, like the ripple is traveling rather than pulsing
+/// uniformly. Built here from two sine harmonics at different
+/// frequencies/phases summed per point, sampled densely and smoothed
+/// through a continuous spline (not 3 independent bezier segments, which
+/// looked visibly segmented/blocky up close).
+class _LiquidWipeClipper extends CustomClipper<Path> {
+  _LiquidWipeClipper(this.progress, {this.touchYFraction = 0.5});
+
+  /// 0 = page fully hidden (about to enter from the right), 1 = fully
+  /// revealed.
+  final double progress;
+
+  /// Where (0 = top, 1 = bottom) the finger actually touched down — the
+  /// ripple is biased to be strongest there and fall off further along the
+  /// edge, so the wave visibly originates from wherever you placed your
+  /// finger rather than being uniform top-to-bottom. Defaults to center for
+  /// the non-interactive uses (the instant push-resolve and the pop
+  /// animation), which have no real touch point driving them.
+  final double touchYFraction;
+
+  static const _pointCount = 14;
+
+  @override
+  Path getClip(Size size) {
+    final edgeX = size.width * (1 - progress);
+    // 0 at both ends of the swipe, peaks mid-swipe — the liquid settles
+    // perfectly flat the instant the page is fully open or fully closed,
+    // rather than staying wavy at rest.
+    final envelope = sin(progress * pi);
+
+    final points = <Offset>[];
+    for (var i = 0; i <= _pointCount; i++) {
+      final t = i / _pointCount;
+      // Two harmonics, deliberately mismatched in both frequency and
+      // phase-drift-over-progress — that mismatch is what stops every
+      // point from bulging at the same moment.
+      final wobble = sin(t * 2 * pi * 1.7 + progress * 3.6) * 0.6 +
+          sin(t * 2 * pi * 0.9 - progress * 2.3) * 0.4;
+      // Gaussian falloff centered on the touch point — amplitude peaks
+      // right where the finger is/was, fading out further along the edge.
+      final distanceFromTouch = t - touchYFraction;
+      final proximity = exp(-pow(distanceFromTouch * 3.2, 2));
+      final amplitude = 34 * (0.35 + 0.65 * proximity);
+      points.add(Offset(edgeX + wobble * amplitude * envelope, t * size.height));
+    }
+
+    final path = Path()..moveTo(size.width, 0)..lineTo(points.first.dx, points.first.dy);
+    // Quadratic-through-midpoints: a standard trick for a smooth
+    // continuous curve through a point set, rather than sharp corners at
+    // every sample point.
+    for (var i = 1; i < points.length; i++) {
+      final prev = points[i - 1];
+      final curr = points[i];
+      final mid = Offset((prev.dx + curr.dx) / 2, (prev.dy + curr.dy) / 2);
+      path.quadraticBezierTo(prev.dx, prev.dy, mid.dx, mid.dy);
+    }
+    path.lineTo(points.last.dx, points.last.dy);
+    path
+      ..lineTo(size.width, size.height)
+      ..close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant _LiquidWipeClipper oldClipper) =>
+      oldClipper.progress != progress || oldClipper.touchYFraction != touchYFraction;
+}
+
 class _Header extends StatelessWidget {
   const _Header({
     required this.isScanning,
     required this.onToggle,
     required this.onPlant,
-    required this.onMyEchoes,
   });
 
   final bool isScanning;
   final VoidCallback onToggle;
   final VoidCallback onPlant;
-  final VoidCallback onMyEchoes;
 
   @override
   Widget build(BuildContext context) {
@@ -171,21 +400,6 @@ class _Header extends StatelessWidget {
               const SizedBox(width: 12),
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: onMyEchoes,
-                    // Green — distinct from violet (create) and cyan
-                    // (scan): this is "your own content," closer in spirit
-                    // to the unlocked/success accent than either of those.
-                    child: GlassSurface(
-                      borderRadius: 12,
-                      padding: const EdgeInsets.all(10),
-                      child: const Icon(
-                        Icons.library_music_rounded,
-                        color: AppColors.signalGreen,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
                   GestureDetector(
                     onTap: onPlant,
                     // Violet, not cyan — plant/create reads as its own action

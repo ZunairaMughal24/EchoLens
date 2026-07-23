@@ -182,7 +182,7 @@ class _EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.library_music_rounded,
+              Icons.graphic_eq_rounded,
               size: 48,
               color: AppColors.textMuted,
             ),
