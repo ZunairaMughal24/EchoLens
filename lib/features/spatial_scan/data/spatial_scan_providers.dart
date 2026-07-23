@@ -8,7 +8,7 @@ import '../domain/services/audio_recorder.dart';
 import '../domain/services/bearing_calculator.dart';
 import '../domain/services/distance_calculator.dart';
 import '../domain/services/heading_provider.dart';
-import '../domain/usecases/calculate_guidance_bearing.dart';
+import '../domain/usecases/decompose_cardinal_offset.dart';
 import '../domain/usecases/evaluate_signal_proximity.dart';
 import '../domain/usecases/get_current_user_location.dart';
 import '../domain/usecases/plant_signal.dart';
@@ -101,6 +101,6 @@ final watchDeviceHeadingProvider = StreamProvider<double>(
   (ref) => ref.watch(headingProviderProvider).watchHeading(),
 );
 
-final calculateGuidanceBearingProvider = Provider(
-  (ref) => CalculateGuidanceBearing(ref.watch(bearingCalculatorProvider)),
+final decomposeCardinalOffsetProvider = Provider(
+  (ref) => const DecomposeCardinalOffset(),
 );

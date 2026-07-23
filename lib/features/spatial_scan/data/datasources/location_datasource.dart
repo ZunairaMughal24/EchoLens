@@ -30,6 +30,15 @@ class GeolocatorLocationDataSource implements LocationDataSource {
   @override
   Stream<Position> watchPosition() async* {
     await _ensurePermission();
+    // Seed with the OS's cached last-known fix — usually available near
+    // instantly — before the live stream, which on a cold GPS start can
+    // take anywhere from several seconds to 30+ indoors before its first
+    // event. Without this, the UI has nothing to show and sits on
+    // "locating…" the whole time even though the OS already has a recent
+    // position on hand. The live stream below still takes over immediately
+    // and keeps refining it.
+    final lastKnown = await Geolocator.getLastKnownPosition();
+    if (lastKnown != null) yield lastKnown;
     yield* Geolocator.getPositionStream(locationSettings: _settings);
   }
 

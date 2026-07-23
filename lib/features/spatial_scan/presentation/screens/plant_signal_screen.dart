@@ -25,6 +25,7 @@ class PlantSignalScreen extends ConsumerWidget {
           child: Column(
             children: [
               _Header(onClose: () => Navigator.of(context).maybePop()),
+              const _PlantHeading(),
               Expanded(
                 // ConstrainedBox + SingleChildScrollView (rather than a bare
                 // Center) so the recording panel stays centered when it
@@ -109,6 +110,74 @@ class _Header extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Explains the actual mechanic as a real heading, not a small caption
+/// buried near the mic button — without this, the screen was just controls
+/// with no words telling a first-time viewer what planting an echo means.
+class _PlantHeading extends StatelessWidget {
+  const _PlantHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          // Every other piece of content on this screen (record button,
+          // name field, toggle, Plant button) is a GlassSurface — bare text
+          // floating directly on the background was the one thing that
+          // didn't match, which is what read as "not designed." An
+          // icon-badge + left-aligned text reads as a real "info card"
+          // rather than a centered caption, which is what actually looks
+          // dated/default about a centered block of text in a box.
+          child: GlassSurface(
+            borderRadius: 16,
+            tint: AppColors.violetGlow.withValues(alpha: 0.08),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Was a sound-wave icon — this screen's actual hook isn't
+                // "recording audio" (generic, every voice memo app does
+                // that), it's the location anchor, so a pin reads as the
+                // point of the feature instead of a decoration next to it.
+                // Given a gentle breathing pulse (same pattern as the
+                // record button's own pulse below) so it doesn't just sit
+                // there — a static badge next to static text was the other
+                // half of why this read as boring.
+                Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(
+                        color: AppColors.violetGlow.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        Icons.location_on_rounded,
+                        size: 18,
+                        color: AppColors.violetGlow,
+                      ),
+                    )
+                    .animate(onPlay: (controller) => controller.repeat(reverse: true))
+                    .scale(
+                      begin: const Offset(1, 1),
+                      end: const Offset(1.14, 1.14),
+                      duration: 900.ms,
+                      curve: Curves.easeInOut,
+                    ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    "Record a voice note anchored to exactly where you're standing.",
+                    style: AppTextTheme.title.copyWith(color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )
+        .animate()
+        .fadeIn(duration: 450.ms)
+        .slideY(begin: -0.1, curve: Curves.easeOut);
   }
 }
 

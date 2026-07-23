@@ -61,6 +61,10 @@ class EchoNodeCard extends StatefulWidget {
 }
 
 class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMixin {
+  // Drives the tap press-scale (AnimatedScale) — a plain flag, not an
+  // AnimationController, since it's just a two-state toggle.
+  var _isPressed = false;
+
   late final AnimationController _unlockPulseController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 550),
@@ -242,31 +246,45 @@ class _EchoNodeCardState extends State<EchoNodeCard> with TickerProviderStateMix
 
     return GestureDetector(
       onTap: widget.onCardTap,
-      child: Opacity(
-        opacity: depthOpacity,
-        // Both controllers drive the same two visual properties (scale,
-        // glow), so one AnimatedBuilder listening to both recomputes them
-        // together each frame. GlassSurface has to rebuild every frame (its
-        // tint is changing), but `content` doesn't — passed as `child` so
-        // it's built once and reused across every animation frame from
-        // either controller.
-        child: AnimatedBuilder(
-          animation: Listenable.merge([_unlockPulseController, _breathingController]),
-          builder: (context, child) {
-            final scale = depthScale * _pulseScale.value * _breathingScale.value;
-            final glowAlpha = (_glowAlpha.value + _breathingGlowDelta.value).clamp(0.0, 0.7);
-            return Transform.scale(
-              scale: scale,
-              child: GlassSurface(
-                borderRadius: 14,
-                blurSigma: 18,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                tint: isUnlocked ? AppColors.signalGreen.withValues(alpha: glowAlpha) : null,
-                child: child!,
-              ),
-            );
-          },
-          child: content,
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      // A quick, small scale-down-and-back on tap — tactile confirmation
+      // that the tap actually registered, independent of whatever onTap
+      // itself does (opening the guide sheet, or nothing at all for an
+      // already-unlocked card). AnimatedScale (implicit) rather than
+      // another AnimationController: it's a two-state toggle, not a
+      // continuous or multi-stage animation, so it doesn't need one.
+      child: AnimatedScale(
+        scale: _isPressed ? 0.95 : 1.0,
+        duration: 120.ms,
+        curve: Curves.easeOut,
+        child: Opacity(
+          opacity: depthOpacity,
+          // Both controllers drive the same two visual properties (scale,
+          // glow), so one AnimatedBuilder listening to both recomputes them
+          // together each frame. GlassSurface has to rebuild every frame
+          // (its tint is changing), but `content` doesn't — passed as
+          // `child` so it's built once and reused across every animation
+          // frame from either controller.
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_unlockPulseController, _breathingController]),
+            builder: (context, child) {
+              final scale = depthScale * _pulseScale.value * _breathingScale.value;
+              final glowAlpha = (_glowAlpha.value + _breathingGlowDelta.value).clamp(0.0, 0.7);
+              return Transform.scale(
+                scale: scale,
+                child: GlassSurface(
+                  borderRadius: 14,
+                  blurSigma: 18,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  tint: isUnlocked ? AppColors.signalGreen.withValues(alpha: glowAlpha) : null,
+                  child: child!,
+                ),
+              );
+            },
+            child: content,
+          ),
         ),
       ),
     )

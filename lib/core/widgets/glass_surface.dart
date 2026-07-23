@@ -14,6 +14,7 @@ class GlassSurface extends StatelessWidget {
     this.blurSigma = 24,
     this.padding = const EdgeInsets.all(16),
     this.tint,
+    this.tintGradient,
   });
 
   final Widget child;
@@ -21,6 +22,11 @@ class GlassSurface extends StatelessWidget {
   final double blurSigma;
   final EdgeInsets padding;
   final Color? tint;
+
+  /// Multi-color alternative to [tint], for surfaces that want to read as
+  /// genuinely colorful rather than a single flat accent wash. Takes over
+  /// the fill entirely when set — [tint] is ignored.
+  final Gradient? tintGradient;
 
   @override
   Widget build(BuildContext context) {
@@ -50,13 +56,14 @@ class GlassSurface extends StatelessWidget {
             padding: padding,
             decoration: BoxDecoration(
               borderRadius: radius,
-              color: tint ?? AppColors.glassFill,
+              color: tintGradient == null ? (tint ?? AppColors.glassFill) : null,
               border: Border.all(color: AppColors.glassBorder, width: 1),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.glassHighlight, Colors.transparent],
-              ),
+              gradient: tintGradient ??
+                  LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.glassHighlight, Colors.transparent],
+                  ),
             ),
             child: child,
           ),

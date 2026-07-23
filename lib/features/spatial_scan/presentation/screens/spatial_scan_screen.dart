@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -101,6 +102,7 @@ class SpatialScanScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  const _PitchCarousel(),
                   _StatusPanel(
                     nodeCount: state.nodes.length,
                     isScanning: state.isScanning,
@@ -288,7 +290,10 @@ class _PulseField extends StatelessWidget {
   }
 
   bool _shouldBloom(EchoNode node) =>
-      node.isGeoAnchored && !node.isLocked && node.hasVoiceNote && !playedNodeIds.contains(node.id);
+      node.isGeoAnchored &&
+      !node.isLocked &&
+      node.hasVoiceNote &&
+      !playedNodeIds.contains(node.id);
 
   @override
   Widget build(BuildContext context) {
@@ -328,9 +333,16 @@ class _PulseField extends StatelessWidget {
           // naturally starts the instant a node unlocks and stops the
           // instant it's played, just by mounting/unmounting.
           for (final node in declutteredNodes)
-            if (_shouldBloom(node)) _positionedBloom(node, fieldSize, radarSize),
+            if (_shouldBloom(node))
+              _positionedBloom(node, fieldSize, radarSize),
           for (var i = 0; i < declutteredNodes.length; i++)
-            _positionedNode(context, declutteredNodes[i], i, fieldSize, radarSize),
+            _positionedNode(
+              context,
+              declutteredNodes[i],
+              i,
+              fieldSize,
+              radarSize,
+            ),
         ],
       ),
     );
@@ -455,7 +467,8 @@ class _BloomPulse extends StatefulWidget {
   State<_BloomPulse> createState() => _BloomPulseState();
 }
 
-class _BloomPulseState extends State<_BloomPulse> with SingleTickerProviderStateMixin {
+class _BloomPulseState extends State<_BloomPulse>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1400),
@@ -596,6 +609,116 @@ class _SelfPositionMarkerState extends State<_SelfPositionMarker>
   }
 }
 
+/// Rotates through the mechanic explanation plus every pitch angle the app
+/// could be framed around — a single static line only ever tells one story;
+/// a demo video (or a viewer who lingers) gets to see all of them without
+/// committing this screen to just one positioning before that's decided.
+class _PitchCarousel extends StatefulWidget {
+  const _PitchCarousel();
+
+  @override
+  State<_PitchCarousel> createState() => _PitchCarouselState();
+}
+
+class _PitchCarouselState extends State<_PitchCarousel> {
+  static const _lines = [
+    'Signals are hidden nearby. Walk closer to unlock them.',
+    'Leave a message where your story began.',
+    'A voice note waiting for your future self.',
+    'Hidden stories, told by the people who live here.',
+    'A tribute that lives exactly where it matters....',
+  ];
+
+  // One gradient per line, not one for the whole card — this is how the
+  // color lives on-screen now instead of as a tinted box.
+  static const _gradients = [
+    [AppColors.cyanPulse, AppColors.violetGlow],
+    [AppColors.violetGlow, AppColors.magentaEdge],
+    [AppColors.cyanPulse, AppColors.signalGreen],
+    [AppColors.amberWarn, AppColors.magentaEdge],
+    [AppColors.violetGlow, AppColors.magentaEdge],
+  ];
+
+  late final Timer _timer;
+  var _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
+      setState(() => _index = (_index + 1) % _lines.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      // Fixed width (fills the row) and a fixed-height inner box — without
+      // both, the card resized itself on every rotation since the lines
+      // vary a lot in length ("A tribute that lives exactly where it
+      // matters." vs. "Hidden stories, told by the people who live here."),
+      // which read as the layout jittering rather than a clean crossfade.
+      child: SizedBox(
+        width: double.infinity,
+        child: GlassSurface(
+          // No tint — every other neutral (non-state) surface in the app,
+          // like the status panel below, uses the plain default glass.
+          // Coloring just this one card was what made it look out of place
+          // against an otherwise consistently dark, monochrome-glass UI.
+          borderRadius: 16,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          child: SizedBox(
+            height: 40,
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: 450.ms,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.25),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                // ShaderMask paints the gradient, but only where the child
+                // already has opaque pixels — the child's own color is
+                // irrelevant (blended away by BlendMode.modulate), only its
+                // alpha/shape matters, which is why plain white here still
+                // ends up fully gradient-colored on screen.
+                child: ShaderMask(
+                  key: ValueKey(_index),
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: _gradients[_index],
+                  ).createShader(bounds),
+                  child: Text(
+                    _lines[_index],
+                    style: AppTextTheme.caption.copyWith(
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                    // textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ).animate().fadeIn(delay: 400.ms, duration: 500.ms);
+  }
+}
+
 class _StatusPanel extends StatelessWidget {
   const _StatusPanel({required this.nodeCount, required this.isScanning});
 
@@ -658,14 +781,14 @@ class _StatusReadout extends StatelessWidget {
         // caption/title (Nunito), not hudLabel/hudValue — this is "the
         // bottom widget where we show live," explicitly asked to be
         // Nunito, distinct from the card subtitles which stay monospace.
-        Text(label, style: AppTextTheme.caption.copyWith(fontSize: 9, letterSpacing: 1.2)),
+        Text(
+          label,
+          style: AppTextTheme.caption.copyWith(fontSize: 9, letterSpacing: 1.2),
+        ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: AppTextTheme.title.copyWith(
-            fontSize: 16,
-            color: valueColor,
-          ),
+          style: AppTextTheme.title.copyWith(fontSize: 16, color: valueColor),
         ),
       ],
     );

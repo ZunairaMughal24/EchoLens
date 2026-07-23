@@ -65,8 +65,8 @@ class EchoNode {
   final String? audioFilePath;
 
   /// The planter's choice, set at plant time and never recomputed: whether
-  /// finders get a live compass-arrow guide toward this node while it's
-  /// still locked (see `CalculateGuidanceBearing`), or have to find it by
+  /// finders get a live directional guide toward this node while it's
+  /// still locked (see `echoGuidanceProvider`), or have to find it by
   /// scanning alone. Meaningless for ambient (non-geo-anchored) nodes.
   final bool isGuided;
 
