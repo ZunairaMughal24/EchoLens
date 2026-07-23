@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -532,6 +533,24 @@ class _PulseField extends StatelessWidget {
       node.hasVoiceNote &&
       !playedNodeIds.contains(node.id);
 
+  /// 0 (nothing locked nearby) to 1 (standing right on top of one) — drives
+  /// the self-marker's "heartbeat quickens as you approach" behavior.
+  /// Reuses [EchoNode.distance] (the same real-GPS-derived value that
+  /// already positions a card near the radar's center as you close in)
+  /// rather than recomputing proximity separately, so the marker's
+  /// urgency and the card's own inward drift always agree. Only locked
+  /// nodes count — once something's already unlocked, the hunt for it is
+  /// over, so it shouldn't keep the marker's pulse racing.
+  double _nearestLockedIntensity(List<EchoNode> nodes) {
+    double? closest;
+    for (final node in nodes) {
+      if (!node.isGeoAnchored || !node.isLocked) continue;
+      if (closest == null || node.distance < closest) closest = node.distance;
+    }
+    if (closest == null) return 0.0;
+    return (1 - closest).clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     // 0.86 (was 0.62): the drawn radar disk itself now fills most of the
@@ -562,7 +581,10 @@ class _PulseField extends StatelessWidget {
           // as the user's own live position the way each node dot reads as
           // an echo's position — which is what actually makes a node's
           // inward drift toward center legible as "I'm getting closer."
-          _SelfPositionMarker(isScanning: isScanning),
+          _SelfPositionMarker(
+            isScanning: isScanning,
+            proximityIntensity: _nearestLockedIntensity(declutteredNodes),
+          ),
           // Bloom is purely derived from each node's current state, not a
           // triggered "event" — so it needs no listener/list bookkeeping.
           // A node either currently qualifies (renders, animating) or it
@@ -746,16 +768,23 @@ class _BloomPulseState extends State<_BloomPulse>
   }
 }
 
-/// A crisp white "you are here" dot with a slow outward sonar-style pulse
-/// ring, centered on the radar. Deliberately white/[AppColors.textPrimary],
-/// not cyan — the ambient core glow and sweep are already cyan, so a cyan
-/// marker here would just blend into them instead of reading as a distinct
-/// "this one is you" reference point. Pauses in step with the radar's own
-/// sweep when scanning is paused, rather than pulsing on regardless.
+/// A crisp "you are here" dot with a slow outward sonar-style pulse ring,
+/// centered on the radar. Doubles as a "hot/cold" indicator: the pulse
+/// quickens, glows brighter, and warms from white toward amber — the same
+/// color this app already uses for "pending unlock" on card lock icons —
+/// as [proximityIntensity] rises, plus a matching haptic buzz. Pauses in
+/// step with the radar's own sweep when scanning is paused, rather than
+/// pulsing on regardless.
 class _SelfPositionMarker extends StatefulWidget {
-  const _SelfPositionMarker({required this.isScanning});
+  const _SelfPositionMarker({
+    required this.isScanning,
+    required this.proximityIntensity,
+  });
 
   final bool isScanning;
+
+  /// 0 (nothing locked nearby) to 1 (standing right on top of one).
+  final double proximityIntensity;
 
   @override
   State<_SelfPositionMarker> createState() => _SelfPositionMarkerState();
@@ -765,13 +794,24 @@ class _SelfPositionMarkerState extends State<_SelfPositionMarker>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2200),
+    duration: _pulseDuration(widget.proximityIntensity),
   );
+
+  Timer? _hapticTimer;
+
+  // 2200ms resting, down to 650ms standing right on top of a locked echo —
+  // a heartbeat that visibly quickens as you approach, not just a number
+  // changing on a card.
+  Duration _pulseDuration(double intensity) {
+    final ms = lerpDouble(2200, 650, intensity)!;
+    return Duration(milliseconds: ms.round());
+  }
 
   @override
   void initState() {
     super.initState();
     if (widget.isScanning) _controller.repeat();
+    _syncHaptics();
   }
 
   @override
@@ -782,16 +822,43 @@ class _SelfPositionMarkerState extends State<_SelfPositionMarker>
     } else if (!widget.isScanning && _controller.isAnimating) {
       _controller.stop();
     }
+    if (oldWidget.proximityIntensity != widget.proximityIntensity ||
+        oldWidget.isScanning != widget.isScanning) {
+      _controller.duration = _pulseDuration(widget.proximityIntensity);
+      _syncHaptics();
+    }
+  }
+
+  void _syncHaptics() {
+    _hapticTimer?.cancel();
+    _hapticTimer = null;
+    // Below this, "closing in" doesn't feel meaningful yet — stays quiet
+    // rather than buzzing constantly whenever anything is even vaguely
+    // geo-anchored somewhere on the map.
+    const hapticThreshold = 0.15;
+    if (!widget.isScanning || widget.proximityIntensity < hapticThreshold) return;
+    final intervalMs = lerpDouble(1400, 300, widget.proximityIntensity)!.round();
+    _hapticTimer = Timer.periodic(
+      Duration(milliseconds: intervalMs),
+      (_) => HapticFeedback.lightImpact(),
+    );
   }
 
   @override
   void dispose() {
+    _hapticTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final markerColor = Color.lerp(
+      AppColors.textPrimary,
+      AppColors.amberWarn,
+      widget.proximityIntensity,
+    )!;
+
     return IgnorePointer(
       child: AnimatedBuilder(
         animation: _controller,
@@ -804,7 +871,7 @@ class _SelfPositionMarkerState extends State<_SelfPositionMarker>
               alignment: Alignment.center,
               children: [
                 Opacity(
-                  opacity: (1 - t) * 0.6,
+                  opacity: (1 - t) * (0.6 + 0.3 * widget.proximityIntensity),
                   child: Transform.scale(
                     scale: 0.3 + t * 1.7,
                     child: Container(
@@ -813,7 +880,7 @@ class _SelfPositionMarkerState extends State<_SelfPositionMarker>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppColors.textPrimary,
+                          color: markerColor,
                           width: 1.5,
                         ),
                       ),
@@ -825,18 +892,22 @@ class _SelfPositionMarkerState extends State<_SelfPositionMarker>
             ),
           );
         },
-        // Built once, reused every frame — only the ring around it animates.
+        // Rebuilt whenever proximityIntensity/color changes (a normal
+        // widget rebuild, driven by location updates) but still only once
+        // per *animation frame* — the `child` optimization here is about
+        // not rebuilding 60x/second while the ring animates, not about
+        // never rebuilding at all.
         child: Container(
           width: 10,
           height: 10,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.textPrimary,
+            color: markerColor,
             boxShadow: [
               BoxShadow(
-                color: AppColors.textPrimary.withValues(alpha: 0.8),
-                blurRadius: 8,
-                spreadRadius: 1,
+                color: markerColor.withValues(alpha: 0.8),
+                blurRadius: 8 + 6 * widget.proximityIntensity,
+                spreadRadius: 1 + 2 * widget.proximityIntensity,
               ),
             ],
           ),
