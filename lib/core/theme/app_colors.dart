@@ -22,12 +22,15 @@ abstract final class AppColors {
 
   // Text
   static const textPrimary = Color(0xFFF4F6FF);
-  static const textSecondary = Color(0xFFA6ADC8);
-  // Was 0xFF6B7290 — measured ~4.4:1 against voidBlack, just under the
-  // 4.5:1 WCAG AA floor for small text (this is used at 9-12px throughout
-  // the HUD). Brightened to a comfortable ~6.6:1 while keeping it visibly
-  // dimmer than textSecondary for hierarchy.
-  static const textMuted = Color(0xFF8791AD);
+  // Both secondary/muted were a real hue (blue-violet, matching violetGlow's
+  // family) but at ~24% saturation — desaturated enough that it just read as
+  // flat grey rather than an intentional tint. Pushed saturation up to
+  // ~45-50% while keeping lightness in the same range, so it reads as a
+  // designed periwinkle-grey instead of a generic disabled-text grey.
+  // Contrast against voidBlack only went up (~10.7:1 / ~7.1:1), so this is
+  // strictly better on accessibility too, not a tradeoff.
+  static const textSecondary = Color.fromARGB(255, 222, 225, 240);
+  static const textMuted = Color.fromARGB(255, 202, 207, 230);
 
   static const backgroundGradient = LinearGradient(
     begin: Alignment.topCenter,

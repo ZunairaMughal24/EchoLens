@@ -242,11 +242,19 @@ class _PulseField extends StatelessWidget {
 
     final angles = [for (final node in nodes) node.angleRadians];
     final radii = [for (final node in nodes) placementRadiusFor(node)];
-    const minSeparationPx = 84.0; // card footprint + a little breathing room
+    // Cards are 140px wide and can scale up to ~1.1x by depth (see
+    // depthScale in EchoNodeCard) — 154px at their largest. 84 was smaller
+    // than the card's own resting width, so this pass could report "far
+    // enough apart" while cards still visibly overlapped; that's the actual
+    // cause of the reported clustering, not just a busy layout. 168 clears
+    // the card's largest rendered footprint with a little margin to spare.
+    const minSeparationPx = 168.0;
     const maxPushPerPass =
         pi / 6; // clamp so near-center nodes (small radius) don't swing wildly
 
-    for (var pass = 0; pass < 4; pass++) {
+    // 6 passes (was 4) — the larger separation target above needs a bit
+    // more iteration headroom to actually converge for a full node list.
+    for (var pass = 0; pass < 6; pass++) {
       for (var i = 0; i < nodes.length; i++) {
         for (var j = i + 1; j < nodes.length; j++) {
           final posA = Offset(

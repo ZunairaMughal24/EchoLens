@@ -25,23 +25,41 @@ class GlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(borderRadius);
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            color: tint ?? AppColors.glassFill,
-            border: Border.all(color: AppColors.glassBorder, width: 1),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.glassHighlight, Colors.transparent],
-            ),
+    // The shadow has to live outside the ClipRRect/BackdropFilter — a
+    // BoxShadow drawn *inside* a clipped blur container gets clipped away
+    // with everything else, so it'd never actually render. Without this,
+    // every glass surface in the app was flat against the background
+    // instead of visibly floating above it, no matter how good the blur
+    // and border looked up close.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.32),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
-          child: child,
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              color: tint ?? AppColors.glassFill,
+              border: Border.all(color: AppColors.glassBorder, width: 1),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.glassHighlight, Colors.transparent],
+              ),
+            ),
+            child: child,
+          ),
         ),
       ),
     );

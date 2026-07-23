@@ -27,7 +27,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
   MockEchoScanDataSource({Random? random, LocalSignalStore? signalStore})
       : _random = random ?? Random(),
         _signalStore = signalStore ?? LocalSignalStore() {
-    _nodes = List.generate(6, (i) => _seedNode(i));
+    _nodes = List.generate(_ambientNodeCount, (i) => _seedNode(i));
     _controller = StreamController<List<EchoNodeModel>>.broadcast(
       onListen: () {
         _ticker = Timer.periodic(const Duration(milliseconds: 900), (_) {
@@ -58,6 +58,12 @@ class MockEchoScanDataSource implements EchoScanDataSource {
     'Beacon Echo',
     'Thermal Trace',
   ];
+
+  // Was 6 — purely decorative ambient nodes competing for the same limited
+  // radar space as anything real (geo-anchored/planted) is what made the
+  // field read as cluttered even with the card-repulsion pass in place.
+  // Fewer of them still keeps the field feeling alive without crowding it.
+  static const _ambientNodeCount = 4;
 
   // Hardcoded demo target for the Phase 2 proximity-unlock flow. "Signal
   // Cluster" (index 0) starts encrypted and only reveals itself once the
@@ -99,7 +105,7 @@ class MockEchoScanDataSource implements EchoScanDataSource {
     // Place seeds in evenly-spaced sectors (with a little jitter) rather
     // than pure random angles, so their glass cards don't land on top of
     // each other — a fully random draw noticeably clustered on-device.
-    final sectorAngle = (2 * pi / 6) * index;
+    final sectorAngle = (2 * pi / _ambientNodeCount) * index;
     final jitter = (_random.nextDouble() - 0.5) * (pi / 6);
     final isSignalTarget = index == 0;
     return EchoNodeModel(
