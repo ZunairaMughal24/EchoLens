@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Plain near-black base (see [AppColors.backgroundGradient]) plus a
-/// couple of very faint color blooms — just enough presence to avoid pure
-/// flatness without the background competing with the actual content.
-/// Kept deliberately subtle: a previous pass pushed opacity much higher
-/// and it read as too much, not "atmospheric."
+/// The app's background image (assets/images/echolensBg.jpeg — a dark,
+/// textured gradient in the same violet/cyan story as the app's own accent
+/// colors) plus a couple of very faint color blooms on top — just enough
+/// extra presence without the background competing with the actual
+/// content. Kept deliberately subtle: a previous pass pushed opacity much
+/// higher and it read as too much, not "atmospheric."
 class NebulaBackground extends StatelessWidget {
   const NebulaBackground({super.key, required this.child});
 
@@ -17,7 +18,15 @@ class NebulaBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const DecoratedBox(decoration: BoxDecoration(gradient: AppColors.backgroundGradient)),
+        Image.asset(
+          'assets/images/echolensBg.jpeg',
+          fit: BoxFit.cover,
+          // Falls back to the plain gradient rather than a broken-image
+          // icon if the asset is ever missing — the background should
+          // never be able to visibly break the app.
+          errorBuilder: (context, error, stackTrace) =>
+              const DecoratedBox(decoration: BoxDecoration(gradient: AppColors.backgroundGradient)),
+        ),
         const IgnorePointer(
           child: Stack(
             children: [

@@ -733,23 +733,39 @@ class _StatusPanel extends StatelessWidget {
           GlassSurface(
                 borderRadius: 20,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _StatusReadout(
-                      label: 'ECHOES DETECTED',
-                      value: '$nodeCount',
+                    // Expanded + Center (was spaceBetween with left-aligned
+                    // text) — the two readouts sat flush against the outer
+                    // edges of the card with their text hugging the left,
+                    // which read as lopsided rather than a clean two-up
+                    // stat row. Each now centers within its own half.
+                    Expanded(
+                      child: Center(
+                        child: _StatusReadout(
+                          label: 'ECHOES DETECTED',
+                          value: '$nodeCount',
+                          valueColor: isScanning
+                              ? AppColors.cyanPulse
+                              : AppColors.textPrimary,
+                        ),
+                      ),
                     ),
                     Container(
                       width: 1,
                       height: 28,
                       color: AppColors.glassBorder,
                     ),
-                    _StatusReadout(
-                      label: 'FIELD STATUS',
-                      value: isScanning ? 'LIVE' : 'PAUSED',
-                      // The one deliberately-accented value on this screen — tied
-                      // to actual state (cyan = actively scanning), not decoration.
-                      valueColor: isScanning ? AppColors.cyanPulse : null,
+                    Expanded(
+                      child: Center(
+                        child: _StatusReadout(
+                          label: 'FIELD STATUS',
+                          value: isScanning ? 'LIVE' : 'PAUSED',
+                          // The one deliberately-accented value on this
+                          // screen — tied to actual state (cyan = actively
+                          // scanning), not decoration.
+                          valueColor: isScanning ? AppColors.cyanPulse : null,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -775,7 +791,6 @@ class _StatusReadout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         // caption/title (Nunito), not hudLabel/hudValue — this is "the
@@ -783,12 +798,18 @@ class _StatusReadout extends StatelessWidget {
         // Nunito, distinct from the card subtitles which stay monospace.
         Text(
           label,
-          style: AppTextTheme.caption.copyWith(fontSize: 9, letterSpacing: 1.2),
+          style: AppTextTheme.caption.copyWith(
+            fontSize: 11,
+            letterSpacing: 1,
+            fontWeight: FontWeight.w500,
+          ),
+          textAlign: TextAlign.center,
         ),
         const SizedBox(height: 2),
         Text(
           value,
           style: AppTextTheme.title.copyWith(fontSize: 16, color: valueColor),
+          textAlign: TextAlign.center,
         ),
       ],
     );
